@@ -4,7 +4,6 @@
 //####  OTHER INCLUDES  #########
 #include "CA_HOST.h"//		#
 #include "utils.h"
-//
 //###############################
 CA_HOST h_CA;
 /**
@@ -27,6 +26,12 @@ int main ( int argc, char *argv[] ){
 	hostInitialize(argc,argv);
 	//configure CA HOST
 	h_CA.simulationInit();
-	//struct CA_HOST h_CA;
+	//allocate CA_HOST memory
+	h_CA.hostMemoryAllocation();
+	h_CA.loadSubstates();
+	h_CA.printParameters();
+
+	//free CA_HOST memory
+	h_CA.hostMemoryFree();
 	printf("SIMULATION ENDED\n");
 }

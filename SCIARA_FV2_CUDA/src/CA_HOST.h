@@ -8,6 +8,7 @@
 #ifndef CA_HOST_CUH_
 #define CA_HOST_CUH_
 #include <iostream>
+#include <fstream>
 #include <string.h>
 #include "utils.h"
 
@@ -27,13 +28,13 @@ struct CA_HOST{
 	sPATH s_lava_thickness;
 	sPATH s_lava_temperature;
 	sPATH s_lava_solidified;
-
-
+	double NODATA_VALUE;
 	//#############################  CA PARAMETERS (HOST)  ##########################
 	//																				#
 	//									 											#
 	int h_NR;	//numbers of rows													#
 	int h_NC;	//numbers of column													#
+	int h_NUMCELLS; //number of cells = h_NR*h_NC									#
 	//																				#
 	double h_Pclock;	//AC clock [s]												#
 	double h_Pc;	//cell side [m]													#
@@ -72,9 +73,18 @@ struct CA_HOST{
 	CA_HOST();
 	void setDataFolderPath(ccPATH dfPath);
 	bool loadParameters(ccPATH);
+
 	void simulationInit();
 	void evaluatePowerLawParams(double value_sol, double value_vent, double &k1, double &k2);
-	bool hostAllocation();
+
+	bool hostMemoryAllocation();
+	void hostMemoryFree();
+
+	int h_getIndexOfPosition(int x, int y, int substate);
+	void loadSubstateFromFile(ccPATH path, int substate);
+	void loadSubstates();
+
+	void printParameters();
 };
 
 
@@ -85,6 +95,7 @@ struct CA_HOST{
 CA_HOST::CA_HOST(){
 	h_NR = 0;
 	h_NC = 0;
+	h_NUMCELLS=0;
 	h_Pclock = 0.0;
 	h_Pc = 0.0;
 	h_Pac = 0.0;
@@ -111,6 +122,8 @@ CA_HOST::CA_HOST(){
 	s_lava_temperature="";
 	s_lava_solidified="";
 	s_morphology="";
+
+	NODATA_VALUE=-9999.0;
 }
 
 /**
@@ -341,10 +354,11 @@ void CA_HOST::simulationInit(){
 	//compute the a,b,c,d parameters
 	evaluatePowerLawParams(h_Pr_Tsol, h_Pr_Tvent, h_a, h_b);
 	evaluatePowerLawParams(h_Phc_Tsol, h_Phc_Tvent, h_c, h_d);
+	h_NUMCELLS=h_NC*h_NR;
 
 	//allocate the memory for the substates and other CA structures
 
-	bool go= hostAllocation();
+	bool go= hostMemoryAllocation();
 	if(!go){
 		fatalErrorExit("ALLOCATION ERROR");
 	}
@@ -354,13 +368,105 @@ void CA_HOST::simulationInit(){
  * Allocate
  * @return Was allocation succesfull? Did calloc return a valid heap pointer?
  */
-bool CA_HOST::hostAllocation(){
+bool CA_HOST::hostMemoryAllocation(){
 	//linearized substates.
 	h_sbts = (double *) calloc(NUMBEROFSUBSTATES*h_NR*h_NC, sizeof(double));
 	if(h_sbts)
 		return true;
 	//if something goes wrong with the memory allocation
 	return false;
+}
+
+/**
+ * Release memory used for the substates of the CA host side
+ * Set the pointer to NULL
+ */
+void CA_HOST::hostMemoryFree(){
+	free(h_sbts);
+	h_sbts=NULL;
+}
+
+/**
+ * The linearized index computation works intuitively as follows:
+ * Fist compleate substate 2d matrices have to be jumped (substate*NUMCELLS = substate*(h_NC*h_NR) )
+ * Then we can retrieve the index inside the h_NC*h_NR cells of the right substate matrix
+ * @param x
+ * @param y
+ * @param substate
+ * @return the 2D row-major linearized index of the corrensponding 2D array location (x,y)
+ */
+int CA_HOST::h_getIndexOfPosition(int x, int y, int substate){	//ritorna l'indice del vettore linearizzato della cella (x,y) di un sottostato
+	return ( (h_NUMCELLS * substate)  +   (x * h_NC) + y );
+}
+
+/**
+ * Load the substate, reading the file from the path parameter
+ * @param path
+ * @param substate
+ */
+void CA_HOST::loadSubstateFromFile(ccPATH path, int substate){
+
+	std::ifstream InFile(path);
+
+	if (!InFile){
+		InFile.close();
+		std::string error = "Error opening the file ";
+		error+= path;
+		fatalErrorExit(error.c_str());
+		//implicit exit here calling fatalErrorExit; Execution stops here!
+	}
+
+	double pointValue;
+	for(int row=0; row<h_NR;row++) {
+		for(int col=0; col<h_NC;col++){
+
+			InFile >> pointValue; /* reads a single value for a cell */
+
+			if (pointValue == NODATA_VALUE)
+				pointValue = 0;
+
+			h_sbts[h_getIndexOfPosition(row, col, substate)] = pointValue;
+		}
+	}
+	InFile.close();
+}
+
+/**
+ * Read and initialize the substates from file
+ * There is no need to initialize all the substates
+ * (since starting from scratch a simulation, there
+ * is no lava in the cellular space and hence no
+ * need for thinkness,  * temperature and solidified
+ * lava, and any flows).  It really make sense if want
+ *  to implement the hot start of a simulation
+ *  (from a previous incomplete simulation).
+ *  One can think to save the partial result in file
+ *  for substates temperature thickness and solidified
+ *  lava and restore the simulation.
+ */
+void CA_HOST::loadSubstates(){
+	loadSubstateFromFile(s_morphology.c_str(),QUOTE);
+}
+
+//---------------------------------------------------------------------------
+void CA_HOST::printParameters()
+{
+	printf("---------------------------------------------\n");
+	printf("Paramater		Value\n");
+	printf("---------------------------------------------\n");
+	printf("Pclock			%f\n",  h_Pclock);
+	printf("PTsol			%f\n",  h_PTsol);
+	printf("PTvent			%f\n",  h_PTvent);
+	printf("Pr(Tsol)		%f\n",  h_Pr_Tsol);
+	printf("Pr(Tvent)		%f\n",  h_Pr_Tvent);
+	printf("Phc(Tsol)		%f\n",  h_Phc_Tsol);
+	printf("Phc(Tvent)		%f\n",  h_Phc_Tvent);
+	printf("Pcool			%f\n",  h_Pcool);
+	printf("Prho			%f\n",  h_Prho);
+	printf("Pepsilon		%f\n",  h_Pepsilon);
+	printf("Psigma			%e\n",  h_Psigma);
+	printf("Pcv			%f\n",  h_Pcv);
+	printf("---------------------------------------------\n");
 }
 
 

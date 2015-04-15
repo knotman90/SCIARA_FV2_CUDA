@@ -9,6 +9,7 @@
 #define CA_HOST_CUH_
 #include <iostream>
 #include <string.h>
+#include "utils.h"
 
 /**
  * Const char* PATH
@@ -20,12 +21,12 @@ typedef  const char* ccPATH;
 typedef  std::string sPATH;
 
 struct CA_HOST{
-	sPATH data_folder;
-	sPATH parameters;//;="/home/knotman/cuda-workspace/SCIARA_FV2/data/2001/2001_parameters.cfg";
-	sPATH morphology;//;="/home/knotman/cuda-workspace/SCIARA_FV2/data/2001/2001_morphology.stt";
-	sPATH lava_thickness;//="/home/knotman/cuda-workspace/SCIARA_FV2/data/2001/2001_lava_tickness.stt";
-	sPATH lava_temperature;//="/home/knotman/cuda-workspace/SCIARA_FV2/data/2001/2001_lava_temperature.stt";
-	sPATH lava_solidified;//="/home/knotman/cuda-workspace/SCIARA_FV2/data/2001/2001_lava_solidif.stt";
+	sPATH s_data_folder;
+	sPATH s_parameters;
+	sPATH s_morphology;
+	sPATH s_lava_thickness;
+	sPATH s_lava_temperature;
+	sPATH s_lava_solidified;
 
 
 	//#############################  CA PARAMETERS (HOST)  ##########################
@@ -62,14 +63,18 @@ struct CA_HOST{
 	//																				#
 	//###############################################################################
 
-
-	double *h_CA; //linearized substates
+	//the last enum is just used to have the total number of substates! DO NOT USE IT IN PRODUCTION!
+	enum SubstatesNames {QUOTE=0,THICKNESS,TEMPERATURE,SOLIDIFIED,FLOWN,FLOWO,FLOWE,FLOWS, FLOWNO, FLOWSO, FLOWSE,FLOWNE,NUMBEROFSUBSTATES};
+	double *h_sbts; //linearized substates
 
 
 	//#############################  CA FUNCTIONS (HOST)  ##########################
 	CA_HOST();
 	void setDataFolderPath(ccPATH dfPath);
 	bool loadParameters(ccPATH);
+	void simulationInit();
+	void evaluatePowerLawParams(double value_sol, double value_vent, double &k1, double &k2);
+	bool hostAllocation();
 };
 
 
@@ -98,14 +103,14 @@ CA_HOST::CA_HOST(){
 	h_Pepsilon = 0.0;
 	h_Psigma = 0.0;
 	h_Pcv = 0.0;
-	h_CA = NULL;
+	h_sbts = NULL;
 	//file paths
-	data_folder="";//root path
-	parameters="";
-	lava_thickness="";
-	lava_temperature="";
-	lava_solidified="";
-	morphology="";
+	s_data_folder="";//root path
+	s_parameters="";
+	s_lava_thickness="";
+	s_lava_temperature="";
+	s_lava_solidified="";
+	s_morphology="";
 }
 
 /**
@@ -120,12 +125,12 @@ CA_HOST::CA_HOST(){
  * @param dfPath default the current directory
  */
 void CA_HOST::setDataFolderPath(ccPATH dfPath="./"){
-	 data_folder=dfPath;
-	 parameters =data_folder+"PARAMETERS.cfg";
-	 morphology = data_folder+"MORPHOLOGY.stt";
-	 lava_solidified=data_folder+"LAVA_SOLIDIFIED.stt";
-	 lava_thickness=data_folder+"LAVA_THICKNESS.stt";
-	 lava_temperature=data_folder+"LAVA_TEMPERATURE.stt";
+	s_data_folder=dfPath;
+	s_parameters =s_data_folder+"PARAMETERS.cfg";
+	s_morphology = s_data_folder+"MORPHOLOGY.stt";
+	s_lava_solidified=s_data_folder+"LAVA_SOLIDIFIED.stt";
+	s_lava_thickness=s_data_folder+"LAVA_THICKNESS.stt";
+	s_lava_temperature=s_data_folder+"LAVA_TEMPERATURE.stt";
 }
 
 /**
@@ -155,32 +160,32 @@ void CA_HOST::setDataFolderPath(ccPATH dfPath="./"){
 bool CA_HOST::loadParameters(ccPATH path){
 	FILE *file;
 	char str[255];
-	const char ncols_str[] = "ncols";
-	const char nrows_str[] = "nrows";
-	const char Pclock_str[] = "Pclock";
-	const char Pc_str[] = "Pc";
-	const char PTsol_str[] = "PTsol";
-	const char PTvent_str[] = "PTvent";
-	const char Pr_Tsol_str[] = "Pr_Tsol";
-	const char Pr_Tvent_str[] = "Pr_Tvent";
-	const char Phc_Tsol_str[] = "Phc_Tsol";
-	const char Phc_Tvent_str[] = "Phc_Tvent";
-	const char Pcool_str[] = "Pcool";
-	const char Prho_str[] = "Prho";
-	const char Pepsilon_str[] = "Pepsilon";
-	const char Psigma_str[] = "Psigma";
-	const char Pcv_str[] = "Pcv";
+	const char ncols_str[] 		= "ncols";
+	const char nrows_str[] 		= "nrows";
+	const char Pclock_str[] 	= "Pclock";
+	const char Pc_str[] 		= "Pc";
+	const char PTsol_str[] 		= "PTsol";
+	const char PTvent_str[] 	= "PTvent";
+	const char Pr_Tsol_str[] 	= "Pr_Tsol";
+	const char Pr_Tvent_str[] 	= "Pr_Tvent";
+	const char Phc_Tsol_str[] 	= "Phc_Tsol";
+	const char Phc_Tvent_str[] 	= "Phc_Tvent";
+	const char Pcool_str[] 		= "Pcool";
+	const char Prho_str[] 		= "Prho";
+	const char Pepsilon_str[] 	= "Pepsilon";
+	const char Psigma_str[] 	= "Psigma";
+	const char Pcv_str[] 		= "Pcv";
 
 	if (( file = fopen(path, "r"))==NULL)
 	{
-		printf("Cannot open file parameters.\n");
+		fprintf(stderr,"Cannot open file parameters.\nEXITING");
 		exit(1);
 	}
 
 	//ncols
 	fscanf(file,"%s",&str);
 	if (strcmp(str, ncols_str)){
-		printf("errore ncols.\n");
+		fprintf(stderr,"Error ncols.\n");
 		return false;
 	}
 	fscanf(file,"%s",&str);
@@ -189,7 +194,7 @@ bool CA_HOST::loadParameters(ccPATH path){
 	//nrows
 	fscanf(file,"%s",&str);
 	if (strcmp(str, nrows_str)){
-		printf("errore nrows.\n");
+		fprintf(stderr,"Error nrows.\n");
 		return false;
 	}
 	fscanf(file,"%s",&str);
@@ -198,7 +203,7 @@ bool CA_HOST::loadParameters(ccPATH path){
 	//Pclock
 	fscanf(file,"%s",&str);
 	if (strcmp(str, Pclock_str)){
-		printf("errore Pclock.\n");
+		fprintf(stderr,"Error Pclock.\n");
 		return false;
 	}
 	fscanf(file,"%s",&str);
@@ -207,7 +212,7 @@ bool CA_HOST::loadParameters(ccPATH path){
 	//Pc = cell_size
 	fscanf(file,"%s",&str);
 	if (strcmp(str, Pc_str)){
-		printf("errore Pc.\n");
+		fprintf(stderr,"Error Pc.\n");
 		return false;
 	}
 	fscanf(file,"%s",&str);
@@ -218,7 +223,7 @@ bool CA_HOST::loadParameters(ccPATH path){
 	//PTsol
 	fscanf(file,"%s",&str);
 	if (strcmp(str, PTsol_str)){
-		printf("errore PTsol.\n");
+		fprintf(stderr,"Error PTsol.\n");
 		return false;
 	}
 	fscanf(file,"%s",&str);
@@ -227,7 +232,7 @@ bool CA_HOST::loadParameters(ccPATH path){
 	//PTvent
 	fscanf(file,"%s",&str);
 	if (strcmp(str, PTvent_str)){
-		printf("errore PTvent.\n");
+		fprintf(stderr,"Error PTvent.\n");
 		return false;
 	}
 	fscanf(file,"%s",&str);
@@ -236,7 +241,7 @@ bool CA_HOST::loadParameters(ccPATH path){
 	//Pr_Tsol
 	fscanf(file,"%s",&str);
 	if (strcmp(str, Pr_Tsol_str)){
-		printf("errore Pr_Tsol.\n");
+		fprintf(stderr,"Error Pr_Tsol.\n");
 		return false;
 	}
 	fscanf(file,"%s",&str);
@@ -245,7 +250,7 @@ bool CA_HOST::loadParameters(ccPATH path){
 	//Pr_Tvent
 	fscanf(file,"%s",&str);
 	if (strcmp(str, Pr_Tvent_str)){
-		printf("errore Pr_Tvent.\n");
+		fprintf(stderr,"Error Pr_Tvent.\n");
 		return false;
 	}
 	fscanf(file,"%s",&str);
@@ -254,7 +259,7 @@ bool CA_HOST::loadParameters(ccPATH path){
 	//Phc_Tsol
 	fscanf(file,"%s",&str);
 	if (strcmp(str, Phc_Tsol_str)){
-		printf("errore Phc_Tsol.\n");
+		fprintf(stderr,"Error Phc_Tsol.\n");
 		return false;
 	}
 	fscanf(file,"%s",&str);
@@ -263,7 +268,7 @@ bool CA_HOST::loadParameters(ccPATH path){
 	//Phc_Tvent
 	fscanf(file,"%s",&str);
 	if (strcmp(str, Phc_Tvent_str)){
-		printf("errore Phc_Tvent.\n");
+		fprintf(stderr,"Error Phc_Tvent.\n");
 		return false;
 	}
 	fscanf(file,"%s",&str);
@@ -272,7 +277,7 @@ bool CA_HOST::loadParameters(ccPATH path){
 	//Pcool
 	fscanf(file,"%s",&str);
 	if (strcmp(str, Pcool_str)){
-		printf("errore Pcool.\n");
+		fprintf(stderr,"Error Pcool.\n");
 		return false;
 	}
 	fscanf(file,"%s",&str);
@@ -281,7 +286,7 @@ bool CA_HOST::loadParameters(ccPATH path){
 	//Prho
 	fscanf(file,"%s",&str);
 	if (strcmp(str, Prho_str)){
-		printf("errore Prho.\n");
+		fprintf(stderr,"Error Prho.\n");
 		return false;
 	}
 	fscanf(file,"%s",&str);
@@ -290,7 +295,7 @@ bool CA_HOST::loadParameters(ccPATH path){
 	//Pepsilon
 	fscanf(file,"%s",&str);
 	if (strcmp(str, Pepsilon_str)){
-		printf("errore Pepsilon.\n");
+		fprintf(stderr,"Error Pepsilon.\n");
 		return false;
 	}
 	fscanf(file,"%s",&str);
@@ -299,7 +304,7 @@ bool CA_HOST::loadParameters(ccPATH path){
 	//Psigma
 	fscanf(file,"%s",&str);
 	if (strcmp(str, Psigma_str)){
-		printf("errore Psigma.\n");
+		fprintf(stderr,"Error Psigma.\n");
 		return false;
 	}
 	fscanf(file,"%s",&str);
@@ -308,7 +313,7 @@ bool CA_HOST::loadParameters(ccPATH path){
 	//Pcv
 	fscanf(file,"%s",&str);
 	if (strcmp(str, Pcv_str)){
-		printf("errore Pcv.\n");
+		fprintf(stderr,"Error Pcv.\n");
 		return false;
 	}
 	fscanf(file,"%s",&str);
@@ -319,6 +324,44 @@ bool CA_HOST::loadParameters(ccPATH path){
 	return true;
 
 }//load parameters
+
+void CA_HOST::evaluatePowerLawParams(double value_sol, double value_vent, double &k1, double &k2){
+
+	k2 = ( log10(value_vent) - log10(value_sol) ) / (h_PTvent - h_PTsol) ;
+	k1 = log10(value_sol) - k2*(h_PTsol);
+}
+
+/**
+ * Performs all the preliminary operation required
+ * to finalize the configuration of the simulation
+ * -compute the a,b,c,d parameters
+ * - allocate memory for substates
+ */
+void CA_HOST::simulationInit(){
+	//compute the a,b,c,d parameters
+	evaluatePowerLawParams(h_Pr_Tsol, h_Pr_Tvent, h_a, h_b);
+	evaluatePowerLawParams(h_Phc_Tsol, h_Phc_Tvent, h_c, h_d);
+
+	//allocate the memory for the substates and other CA structures
+
+	bool go= hostAllocation();
+	if(!go){
+		fatalErrorExit("ALLOCATION ERROR");
+	}
+}
+
+/**
+ * Allocate
+ * @return Was allocation succesfull? Did calloc return a valid heap pointer?
+ */
+bool CA_HOST::hostAllocation(){
+	//linearized substates.
+	h_sbts = (double *) calloc(NUMBEROFSUBSTATES*h_NR*h_NC, sizeof(double));
+	if(h_sbts)
+		return true;
+	//if something goes wrong with the memory allocation
+	return false;
+}
 
 
 #endif /* CA_HOST_CUH_ */

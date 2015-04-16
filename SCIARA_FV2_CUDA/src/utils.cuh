@@ -23,6 +23,12 @@ void fatalErrorExit(const char* errmsg){
 }
 
 
+
+
+
+
+
+
 struct CommandLine{
 	//parameters
 	bool	_load_config;

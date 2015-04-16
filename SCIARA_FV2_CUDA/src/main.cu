@@ -53,6 +53,7 @@ int main ( int argc, char *argv[] ){
  */
 
 	h_CA.copyBackFromGPU(d_CA);
+	h_CA.saveSubstatesOnFile(h_CA.getDataFolder()+"/output/");
 
 	//host initialization and configuration completed
 	h_CA.deviceMemoryFree(d_CA);

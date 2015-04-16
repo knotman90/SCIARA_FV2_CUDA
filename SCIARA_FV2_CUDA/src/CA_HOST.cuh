@@ -24,6 +24,7 @@ typedef  const char* ccPATH;
 typedef  std::string sPATH;
 
 class CA_HOST{
+
 private:
 	CA_GPU host_handle; //HOST handle that contains GPUallocated pointer (needed to call free!)
 
@@ -73,6 +74,9 @@ private:
 
 	double* h_sbts; //linearized substates
 
+	//## PRIVATE METHODS ##
+	__host__ void saveSubstateOnFile (ccPATH path,int substate);
+
 public:
 	//#############################  CA FUNCTIONS (HOST)  ##########################
 	CA_HOST();
@@ -100,6 +104,15 @@ public:
 
 	void copyBackFromGPU(CA_GPU* d_CA);
 
+	void saveSubstatesOnFile(sPATH );
+
+
+
+
+	//GETTER AND SETTERS
+	const sPATH& getDataFolder() const {
+		return s_data_folder;
+	}
 };
 
 
@@ -565,8 +578,50 @@ void CA_HOST::copyParametersFromCA_HOST_to_CA_GPU(CA_GPU* h_CAGPU){
  * @param d_CA
  */
 void CA_HOST::copyBackFromGPU(CA_GPU* d_CA){
-CUDASAFECALL(cudaMemcpy(h_sbts,host_handle.d_sbts_current,h_NUMCELLS*sizeof(double),cudaMemcpyDeviceToHost));
+	CUDASAFECALL(cudaMemcpy(h_sbts,host_handle.d_sbts_current,h_NUMCELLS*sizeof(double),cudaMemcpyDeviceToHost));
 
 }
+
+
+void CA_HOST::saveSubstateOnFile (const char* path,int substate)
+{
+	FILE *file;
+	file = fopen (path,"w");
+
+	fprintf(file, "ncols %f \n",0);
+	fprintf(file, "nrows %f \n",0);
+	fprintf(file, "xllcorner %f \n",0);
+	fprintf(file, "yllcorner %f \n",0);
+	fprintf(file, "cellsize %f \n",0);
+	fprintf(file, "NODATA_value %f \n",0);
+
+	if ( file )	{
+		for(int row = 0; row < h_NR; row++){
+			for(int col = 0; col < h_NC; col++){
+				fprintf(file, "%f ",h_sbts[h_getIndexOfPosition(row,col,substate)]);
+			}
+			fprintf(file,"\n");
+		}
+		fclose ( file ) ;
+	}
+}
+
+ void CA_HOST::saveSubstatesOnFile (sPATH outputFolderRoot){
+	 std::string savepath;
+	 //save QUOTE
+	savepath=outputFolderRoot+"QUOTE.out.sst";
+	saveSubstateOnFile(savepath.c_str(),QUOTE);
+	//save THICKNESS
+	savepath=outputFolderRoot+"THICKNESS.out.sst";
+	saveSubstateOnFile(savepath.c_str(),THICKNESS);
+	//save TEMPERATURE
+	savepath=outputFolderRoot+"TEMPERATURE.out.sst";
+	saveSubstateOnFile(savepath.c_str(),TEMPERATURE);
+	//save SOLIFIED_LAVA
+	savepath=outputFolderRoot+"SOLIFIED_LAVA.out.sst";
+	saveSubstateOnFile(savepath.c_str(),SOLIDIFIED);
+}
+
+
 
 #endif /* CA_HOST_CUH_ */

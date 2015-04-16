@@ -4,6 +4,7 @@
 //####  OTHER INCLUDES  #########
 #include "CA_HOST.cuh"//		#
 #include "utils.cuh"
+
 //###############################
 CA_HOST h_CA;
 CA_GPU* d_CA;
@@ -19,8 +20,21 @@ void hostInitialize(int argc, char *argv[]){
 	cmd.parseArgv(argc,argv);
 	//configure hosts simulation
 	h_CA.setDataFolderPath(cmd._load_path);
-	h_CA.loadParameters(h_CA.s_parameters.c_str());
+	h_CA.loadParameters();
 }
+
+
+
+//##### TRANSITION FUNCTION KERNELS ######
+
+__global__ void printSubstateG(CA_GPU* d_CA, int substate){
+	d_CA->printSubstate(0);
+}
+
+
+//#######################################
+
+
 
 
 int main ( int argc, char *argv[] ){
@@ -34,7 +48,11 @@ int main ( int argc, char *argv[] ){
 
 	d_CA=h_CA.deviceCAGPUInitialization();
 
+/*
+ * GLOBAL TRANSITION FUNCTION ON GPU
+ */
 
+	h_CA.copyBackFromGPU(d_CA);
 
 	//host initialization and configuration completed
 	h_CA.deviceMemoryFree(d_CA);

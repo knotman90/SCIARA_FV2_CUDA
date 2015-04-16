@@ -7,10 +7,9 @@
 
 #ifndef CA_GPU_CUH_
 #define CA_GPU_CUH_
-
-struct CA_GPU{
-
-
+class CA_GPU{
+	 friend class CA_HOST;
+private:
 	//#############################  CA PARAMETERS (DEVICE)  ##########################
 	//																				#
 	//									 											#
@@ -50,18 +49,32 @@ struct CA_GPU{
 	double* d_sbts_current; //linearized substates
 	double* d_sbts_updated; //linearized substates
 
+public:
 	//#############################  CA FUNCTIONS (DEVICE)  ##########################
 	CA_GPU(){};//default constructor
-	void printParameters();
+	__host__ void printParameters();
 
 
+//### KERNELS AND GPU CODE FOR THE TRANSITION FUNCTION #####
+	__device__ int d_getIdx(int x, int y, int substate)	{
+		return ( (d_NUMCELLS * substate)  +   (x * d_NC) + y );
+	}
+
+	__device__ void printSubstate(int substate);
 
 
 };
 
-
+__device__ void CA_GPU::printSubstate(int substate){
+		for(int i=0;i<10;i++){
+			for (int j = 0; j < 10; j++) {
+				printf("%.3f ",d_sbts_current[d_getIdx(i,j,0)]);
+			}
+			printf("\n");
+		}
+	}
 //---------------------------------------------------------------------------
-void CA_GPU::printParameters()
+__host__ void CA_GPU::printParameters()
 {
 	printf("---------------------------------------------\n");
 	printf("Paramater		Value\n");

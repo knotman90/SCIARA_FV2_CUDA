@@ -23,8 +23,9 @@ typedef  const char* ccPATH;
  * */
 typedef  std::string sPATH;
 
-struct CA_HOST{
-	CA_GPU toBecopied; //HOST handle that contains GPUallocated pointer (needed to call free!)
+class CA_HOST{
+private:
+	CA_GPU host_handle; //HOST handle that contains GPUallocated pointer (needed to call free!)
 
 	sPATH s_data_folder;
 	sPATH s_parameters;
@@ -72,11 +73,11 @@ struct CA_HOST{
 
 	double* h_sbts; //linearized substates
 
-
+public:
 	//#############################  CA FUNCTIONS (HOST)  ##########################
 	CA_HOST();
 	void setDataFolderPath(ccPATH dfPath);
-	bool loadParameters(ccPATH);
+	bool loadParameters();
 
 	void simulationInit();
 	void evaluatePowerLawParams(double value_sol, double value_vent, double &k1, double &k2);
@@ -96,7 +97,11 @@ struct CA_HOST{
 	CA_GPU* deviceCAGPUInitialization();
 
 	void copyParametersFromCA_HOST_to_CA_GPU(CA_GPU* h_CAGPU);
+
+	void copyBackFromGPU(CA_GPU* d_CA);
+
 };
+
 
 
 /**
@@ -109,14 +114,14 @@ struct CA_HOST{
  */
 CA_GPU* CA_HOST::deviceCAGPUInitialization(){
 
-	copyParametersFromCA_HOST_to_CA_GPU(&toBecopied);
-	deviceMemoryAllocation(&toBecopied);
-	CUDASAFECALL (cudaMemcpy(toBecopied.d_sbts_current,this->h_sbts,sizeof(double)*h_NUMCELLS,cudaMemcpyHostToDevice));
+	copyParametersFromCA_HOST_to_CA_GPU(&host_handle);
+	deviceMemoryAllocation(&host_handle);
+	CUDASAFECALL (cudaMemcpy(host_handle.d_sbts_current,this->h_sbts,sizeof(double)*h_NUMCELLS,cudaMemcpyHostToDevice));
 	//cudaMemcpy(toBecopied.d_sbts_updated,this->h_sbts,sizeof(double)*h_NUMCELLS,cudaMemcpyHostToDevice);//probably unecessary
 
 	CA_GPU* d_pointer;
 	CUDASAFECALL(cudaMalloc(&d_pointer,sizeof(CA_GPU)));
-	CUDASAFECALL(cudaMemcpy(d_pointer,&toBecopied,sizeof(CA_GPU),cudaMemcpyHostToDevice));
+	CUDASAFECALL(cudaMemcpy(d_pointer,&host_handle,sizeof(CA_GPU),cudaMemcpyHostToDevice));
 
 	return d_pointer;
 }
@@ -134,8 +139,8 @@ bool CA_HOST::deviceMemoryAllocation(CA_GPU* d_CA){
  * @param d_CA
  */
 void CA_HOST::deviceMemoryFree(CA_GPU* d_CA){		//Device memory free
-	CUDASAFECALL( cudaFree(toBecopied.d_sbts_current) );
-	CUDASAFECALL( cudaFree(toBecopied.d_sbts_updated) );
+	CUDASAFECALL( cudaFree(host_handle.d_sbts_current) );
+	CUDASAFECALL( cudaFree(host_handle.d_sbts_updated) );
 	CUDASAFECALL( cudaFree(d_CA));
 
 }
@@ -221,7 +226,8 @@ void CA_HOST::setDataFolderPath(ccPATH dfPath="./"){
  * @param path
  * @return a bool value which value tell if parsing succeded.
  */
-bool CA_HOST::loadParameters(ccPATH path){
+bool CA_HOST::loadParameters(){
+	ccPATH path = this->s_parameters.c_str();
 	FILE *file;
 	char str[255];
 	const char ncols_str[] 		= "ncols";
@@ -488,7 +494,7 @@ void CA_HOST::loadSubstates(){
 }
 
 //---------------------------------------------------------------------------
-void CA_HOST::printParameters()
+__host__ void CA_HOST::printParameters()
 {
 	printf("---------------------------------------------\n");
 	printf("Paramater		Value\n");
@@ -552,6 +558,15 @@ void CA_HOST::copyParametersFromCA_HOST_to_CA_GPU(CA_GPU* h_CAGPU){
 	h_CAGPU->d_Pepsilon 		= this->h_Pepsilon;
 	h_CAGPU->d_Psigma 			= this->h_Psigma;
 	h_CAGPU->d_Pcv 				= this->h_Pcv;
+}
+
+/**
+ * Overwrite the original INPUT! WARNING
+ * @param d_CA
+ */
+void CA_HOST::copyBackFromGPU(CA_GPU* d_CA){
+CUDASAFECALL(cudaMemcpy(h_sbts,host_handle.d_sbts_current,h_NUMCELLS*sizeof(double),cudaMemcpyDeviceToHost));
+
 }
 
 #endif /* CA_HOST_CUH_ */

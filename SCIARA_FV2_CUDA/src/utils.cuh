@@ -10,7 +10,8 @@
 #include<string.h>
 #include<iostream>
 
-
+/** utility function to compute the grid size */
+__host__ int divup(int x, int y) { return x / y + (x % y ? 1 : 0); }
 
 //the last enum is just used to have the total number of substates! DO NOT USE IT IN PRODUCTION!
 enum SubstatesNames {QUOTE=0,THICKNESS,TEMPERATURE,SOLIDIFIED,FLOWN,FLOWO,FLOWE,FLOWS, FLOWNO, FLOWSO, FLOWSE,FLOWNE,NUMBEROFSUBSTATES};

@@ -31,9 +31,58 @@ __global__ void printSubstateG(CA_GPU* d_CA, int substate){
 	d_CA->printSubstate(0);
 }
 
+/**
+ * Lava emission from vents
+ * @param d_CA
+ */
+__global__ void emitLavaFromVents(CA_GPU* d_CA){
+
+}
+
+/**
+ * Temperature initialization
+ * @param d_CA
+ */
+__global__ void temperatureInitialization(CA_GPU* d_CA){
+
+}
+
+/**
+ * Flows Computation
+ * @param d_CA
+ */
+__global__ void computeFlows(CA_GPU* d_CA){
+
+}
+
+/**
+ * Flows reduction
+ * @param d_CA
+ */
+__global__ void reduceFlows(CA_GPU* d_CA){
+
+}
+
+/**
+ * Temperture Update reduction
+ * @param d_CA
+ */
+__global__ void temperatureUpdate(CA_GPU* d_CA){
+
+}
+
+/**
+ * Copy matrix. Hard Swap the content  current and updated matrix
+ * @param d_CA
+ */
+__global__ void copyMatrices(CA_GPU* d_CA){
+
+}
 
 //#######################################
+void globalTransitionFunction(){
 
+}
 
 
 

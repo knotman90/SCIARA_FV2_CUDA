@@ -10,7 +10,9 @@
 #include <iostream>
 #include <fstream>
 #include <string.h>
-#include "utils.h"
+#include "utils.cuh"
+#include "cuda_error_check.cu"
+#include "CA_GPU.cuh"
 
 /**
  * Const char* PATH
@@ -22,6 +24,8 @@ typedef  const char* ccPATH;
 typedef  std::string sPATH;
 
 struct CA_HOST{
+	CA_GPU toBecopied; //HOST handle that contains GPUallocated pointer (needed to call free!)
+
 	sPATH s_data_folder;
 	sPATH s_parameters;
 	sPATH s_morphology;
@@ -64,9 +68,9 @@ struct CA_HOST{
 	//																				#
 	//###############################################################################
 
-	//the last enum is just used to have the total number of substates! DO NOT USE IT IN PRODUCTION!
-	enum SubstatesNames {QUOTE=0,THICKNESS,TEMPERATURE,SOLIDIFIED,FLOWN,FLOWO,FLOWE,FLOWS, FLOWNO, FLOWSO, FLOWSE,FLOWNE,NUMBEROFSUBSTATES};
-	double *h_sbts; //linearized substates
+
+
+	double* h_sbts; //linearized substates
 
 
 	//#############################  CA FUNCTIONS (HOST)  ##########################
@@ -80,14 +84,61 @@ struct CA_HOST{
 	bool hostMemoryAllocation();
 	void hostMemoryFree();
 
-	int h_getIndexOfPosition(int x, int y, int substate);
+
 	void loadSubstateFromFile(ccPATH path, int substate);
 	void loadSubstates();
 
 	void printParameters();
+	int h_getIndexOfPosition(int x, int y, int substate);
+	//#################  CA_GPU CONTROL FUNCTIONS (HOST-SIDE)  ###################
+	bool deviceMemoryAllocation(CA_GPU* );	//Device memory allocation
+	void deviceMemoryFree(CA_GPU* );		//Device memory free
+	CA_GPU* deviceCAGPUInitialization();
+
+	void copyParametersFromCA_HOST_to_CA_GPU(CA_GPU* h_CAGPU);
 };
 
 
+/**
+ * It first create an host copy of the GPU structure and copy all the parameter from CA_HOST
+ * to this structure. Then the internal buffer (of the host copy of CA_GPU) are allocated ON GPU.
+ * The host copy is then copied on an allocated CA:GPU pointer on GPU. All the parameter are copied
+ * cleanly and the substates pointer were already pointing to GPU allocated memory!
+ * !!!!Should be called ONLY after the CA_HOST initialization is completed!!!!
+ * @return a pointer to a fully allocated and initialized GPU structure
+ */
+CA_GPU* CA_HOST::deviceCAGPUInitialization(){
+
+	copyParametersFromCA_HOST_to_CA_GPU(&toBecopied);
+	deviceMemoryAllocation(&toBecopied);
+	CUDASAFECALL (cudaMemcpy(toBecopied.d_sbts_current,this->h_sbts,sizeof(double)*h_NUMCELLS,cudaMemcpyHostToDevice));
+	//cudaMemcpy(toBecopied.d_sbts_updated,this->h_sbts,sizeof(double)*h_NUMCELLS,cudaMemcpyHostToDevice);//probably unecessary
+
+	CA_GPU* d_pointer;
+	CUDASAFECALL(cudaMalloc(&d_pointer,sizeof(CA_GPU)));
+	CUDASAFECALL(cudaMemcpy(d_pointer,&toBecopied,sizeof(CA_GPU),cudaMemcpyHostToDevice));
+
+	return d_pointer;
+}
+
+bool CA_HOST::deviceMemoryAllocation(CA_GPU* d_CA){
+	size_t size = NUMBEROFSUBSTATES*h_NUMCELLS*sizeof(double);
+	CUDASAFECALL( cudaMalloc(&d_CA->d_sbts_current,size) );
+	CUDASAFECALL( cudaMalloc(&d_CA->d_sbts_updated,size) );
+	return true;
+}
+
+/**
+ * It first free all the GPU array allocated and at
+ * the end deallocates the structure itself that lie on GPU
+ * @param d_CA
+ */
+void CA_HOST::deviceMemoryFree(CA_GPU* d_CA){		//Device memory free
+	CUDASAFECALL( cudaFree(toBecopied.d_sbts_current) );
+	CUDASAFECALL( cudaFree(toBecopied.d_sbts_updated) );
+	CUDASAFECALL( cudaFree(d_CA));
+
+}
 /**
  * Default Constructor for the HOST-SIDE CA data struct
  * @return void
@@ -386,18 +437,6 @@ void CA_HOST::hostMemoryFree(){
 	h_sbts=NULL;
 }
 
-/**
- * The linearized index computation works intuitively as follows:
- * Fist compleate substate 2d matrices have to be jumped (substate*NUMCELLS = substate*(h_NC*h_NR) )
- * Then we can retrieve the index inside the h_NC*h_NR cells of the right substate matrix
- * @param x
- * @param y
- * @param substate
- * @return the 2D row-major linearized index of the corrensponding 2D array location (x,y)
- */
-int CA_HOST::h_getIndexOfPosition(int x, int y, int substate){	//ritorna l'indice del vettore linearizzato della cella (x,y) di un sottostato
-	return ( (h_NUMCELLS * substate)  +   (x * h_NC) + y );
-}
 
 /**
  * Load the substate, reading the file from the path parameter
@@ -454,6 +493,8 @@ void CA_HOST::printParameters()
 	printf("---------------------------------------------\n");
 	printf("Paramater		Value\n");
 	printf("---------------------------------------------\n");
+	printf("ncols			%u\n",  h_NC);
+	printf("nrows			%u\n",  h_NR);
 	printf("Pclock			%f\n",  h_Pclock);
 	printf("PTsol			%f\n",  h_PTsol);
 	printf("PTvent			%f\n",  h_PTvent);
@@ -466,8 +507,51 @@ void CA_HOST::printParameters()
 	printf("Pepsilon		%f\n",  h_Pepsilon);
 	printf("Psigma			%e\n",  h_Psigma);
 	printf("Pcv			%f\n",  h_Pcv);
+	printf("a			%f\n",  h_a);
+	printf("b			%f\n",  h_b);
+	printf("c			%f\n",  h_c);
+	printf("d			%f\n",  h_d);
 	printf("---------------------------------------------\n");
 }
 
+/**
+ * The linearized index computation works intuitively as follows:
+ * Fist compleate substate 2d matrices have to be jumped (substate*NUMCELLS = substate*(h_NC*h_NR) )
+ * Then we can retrieve the index inside the h_NC*h_NR cells of the right substate matrix
+ * @param x
+ * @param y
+ * @param substate
+ * @return the 2D row-major linearized index of the corrensponding 2D array location (x,y)
+ */
+__host__  int CA_HOST::h_getIndexOfPosition(int x, int y, int substate){
+	return ( (h_NUMCELLS * substate)  +   (x * h_NC) + y );
+}
+
+void CA_HOST::copyParametersFromCA_HOST_to_CA_GPU(CA_GPU* h_CAGPU){
+	if(!h_CAGPU)
+		fatalErrorExit("NULL pointer to CA_GPU host structure");
+
+	h_CAGPU->d_NR 				= this->h_NR;
+	h_CAGPU->d_NC 				= this->h_NC;
+	h_CAGPU->d_NUMCELLS 		= this->h_NUMCELLS;
+	h_CAGPU->d_Pclock 			= this->h_Pclock;
+	h_CAGPU->d_Pc 				= this->h_Pc;
+	h_CAGPU->d_Pac 				= this->h_Pac;
+	h_CAGPU->d_PTsol 			= this->h_PTsol;
+	h_CAGPU->d_PTvent  			= this->h_PTvent;
+	h_CAGPU->d_Pr_Tsol 			= this->h_Pr_Tsol;
+	h_CAGPU->d_Pr_Tvent 		= this->h_Pr_Tvent;
+	h_CAGPU->d_a 				= this->h_a;
+	h_CAGPU->d_b 				= this->h_b;
+	h_CAGPU->d_Phc_Tsol 		= this->h_Phc_Tsol;
+	h_CAGPU->d_Phc_Tvent 		= this->h_Phc_Tvent;
+	h_CAGPU->d_c 				= this->h_c;
+	h_CAGPU->d_d 				= this->h_d;
+	h_CAGPU->d_Pcool 			= this->h_Pcool;
+	h_CAGPU->d_Prho 			= this->h_Prho;
+	h_CAGPU->d_Pepsilon 		= this->h_Pepsilon;
+	h_CAGPU->d_Psigma 			= this->h_Psigma;
+	h_CAGPU->d_Pcv 				= this->h_Pcv;
+}
 
 #endif /* CA_HOST_CUH_ */

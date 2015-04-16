@@ -10,6 +10,11 @@
 #include<string.h>
 #include<iostream>
 
+
+
+//the last enum is just used to have the total number of substates! DO NOT USE IT IN PRODUCTION!
+enum SubstatesNames {QUOTE=0,THICKNESS,TEMPERATURE,SOLIDIFIED,FLOWN,FLOWO,FLOWE,FLOWS, FLOWNO, FLOWSO, FLOWSE,FLOWNE,NUMBEROFSUBSTATES};
+
 void fatalErrorExit(const char* errmsg){
 	fprintf(stderr,"FATAL ERROR: %s\nEXITING",errmsg);
 	exit(-1);

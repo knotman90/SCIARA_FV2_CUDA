@@ -9,11 +9,13 @@
 #define CA_HOST_CUH_
 #include <iostream>
 #include <fstream>
+#include <vector>
 #include <string.h>
 #include "utils.cuh"
 #include "cuda_error_check.cu"
 #include "CA_GPU.cuh"
-
+#include "vent.h"
+#include "matrix.h"
 /**
  * Const char* PATH
  * */
@@ -23,18 +25,27 @@ typedef  const char* ccPATH;
  * */
 typedef  std::string sPATH;
 
+
 class CA_HOST{
-
-private:
+public:
 	CA_GPU host_handle; //HOST handle that contains GPUallocated pointer (needed to call free!)
-
+private:
 	sPATH s_data_folder;
 	sPATH s_parameters;
 	sPATH s_morphology;
 	sPATH s_lava_thickness;
 	sPATH s_lava_temperature;
 	sPATH s_lava_solidified;
+	sPATH s_vents;
+	sPATH s_emission_rate;
 	double NODATA_VALUE;
+
+	//### VENTS MANAGEMENT AND EMISSION RATES ###########################
+	unsigned int emission_time;//										#
+	vector<TEmissionRate> emission_rate;//								#
+	vector<TVent> vent;//												#
+	//###################################################################
+
 	//#############################  CA PARAMETERS (HOST)  ##########################
 	//																				#
 	//									 											#
@@ -106,7 +117,12 @@ public:
 
 	void saveSubstatesOnFile(sPATH );
 
-
+	//vent management
+	bool loadVents(sPATH path);
+	bool loadEmissionRate(sPATH path);
+	unsigned int getNumVents(){
+		return vent.size();
+	}
 
 
 	//GETTER AND SETTERS
@@ -114,7 +130,6 @@ public:
 		return s_data_folder;
 	}
 };
-
 
 
 /**
@@ -132,6 +147,29 @@ CA_GPU* CA_HOST::deviceCAGPUInitialization(){
 	CUDASAFECALL (cudaMemcpy(host_handle.d_sbts_current,this->h_sbts,sizeof(double)*h_NUMCELLS,cudaMemcpyHostToDevice));
 	//cudaMemcpy(toBecopied.d_sbts_updated,this->h_sbts,sizeof(double)*h_NUMCELLS,cudaMemcpyHostToDevice);//probably unecessary
 
+	//Copy vents coordinates and vents emission rates
+	//1) convert vents/emissionrate  vector to to linear array
+	unsigned int sizeCoord=vent.size()*2;
+	unsigned int size_EM = vent.size()*(emission_rate[0].size());
+	int tempArray_COORD[sizeCoord];
+	double tempArray_EMISS [size_EM];
+	int i=0;
+	for(auto ve : vent){
+		tempArray_COORD[get_X_LinearIdxVentCoord(i)] = ve.y();//row
+		tempArray_COORD[get_Y_LinearIdxVentCoord(i)] = ve.x();//row
+		int j=0;
+		for(auto em : emission_rate[i].emission_rate()){
+			tempArray_EMISS[i*host_handle.emissionRate_size+j]=emission_rate[i][j];
+			j++;
+		}
+		i++;
+	}
+
+	//2)copy arrays to GPU
+	CUDASAFECALL (cudaMemcpy(host_handle.coordVents,tempArray_COORD,sizeof(int)*sizeCoord,cudaMemcpyHostToDevice));
+	CUDASAFECALL (cudaMemcpy(host_handle.emissionRates,tempArray_EMISS,sizeof(double)*size_EM,cudaMemcpyHostToDevice));
+
+
 	CA_GPU* d_pointer;
 	CUDASAFECALL(cudaMalloc(&d_pointer,sizeof(CA_GPU)));
 	CUDASAFECALL(cudaMemcpy(d_pointer,&host_handle,sizeof(CA_GPU),cudaMemcpyHostToDevice));
@@ -143,6 +181,10 @@ bool CA_HOST::deviceMemoryAllocation(CA_GPU* d_CA){
 	size_t size = NUMBEROFSUBSTATES*h_NUMCELLS*sizeof(double);
 	CUDASAFECALL( cudaMalloc(&d_CA->d_sbts_current,size) );
 	CUDASAFECALL( cudaMalloc(&d_CA->d_sbts_updated,size) );
+
+	//ventsAnd emissionRate
+	CUDASAFECALL(cudaMalloc(&d_CA->coordVents,sizeof(int)*vent.size()*2));//coordinate vents1D(unsigned int)
+	CUDASAFECALL(cudaMalloc(&d_CA->emissionRates,sizeof(double)*emission_rate[0].size()*vent.size()));//coordinate vents(int)
 	return true;
 }
 
@@ -154,6 +196,10 @@ bool CA_HOST::deviceMemoryAllocation(CA_GPU* d_CA){
 void CA_HOST::deviceMemoryFree(CA_GPU* d_CA){		//Device memory free
 	CUDASAFECALL( cudaFree(host_handle.d_sbts_current) );
 	CUDASAFECALL( cudaFree(host_handle.d_sbts_updated) );
+
+	CUDASAFECALL( cudaFree(host_handle.coordVents) );
+	CUDASAFECALL( cudaFree(host_handle.emissionRates) );
+
 	CUDASAFECALL( cudaFree(d_CA));
 
 }
@@ -213,6 +259,8 @@ void CA_HOST::setDataFolderPath(ccPATH dfPath="./"){
 	s_lava_solidified=s_data_folder+"LAVA_SOLIDIFIED.stt";
 	s_lava_thickness=s_data_folder+"LAVA_THICKNESS.stt";
 	s_lava_temperature=s_data_folder+"LAVA_TEMPERATURE.stt";
+	s_emission_rate=s_data_folder+"EMISSIONS_RATE.stt";
+	s_vents=s_data_folder+"VENTS.stt";
 }
 
 /**
@@ -427,12 +475,74 @@ void CA_HOST::simulationInit(){
 	h_NUMCELLS=h_NC*h_NR;
 
 	//allocate the memory for the substates and other CA structures
-
 	bool go= hostMemoryAllocation();
 	if(!go){
 		fatalErrorExit("ALLOCATION ERROR");
 	}
+
+	//vents and emission rate initialization
+	if (!this->loadVents(s_vents.c_str())) fatalErrorExit("VENTS INITIALIZATION ERROR");
+
+	if (!this->loadEmissionRate(s_emission_rate.c_str())) fatalErrorExit("Emission RATE INITIALIZATION ERROR");
+
+	//delete this
+	for (auto v : vent){
+		printf("Vent (%u,%u)\n",v.x(),v.y());
+	}
+
+	for(auto e: emission_rate){
+		e.print();
+	}
+	//
 }
+
+//---------------------------------------------------------------------------
+bool CA_HOST::loadEmissionRate(sPATH path){
+	FILE *input_file;
+	if ( ( input_file = fopen(path.c_str(),"r") ) == NULL){
+		std::string err= "Error opening the emissions rate file: ";
+		err+=path;
+		fatalErrorExit(err.c_str());
+	}
+
+	int emission_rate_file_status = loadEmissionRates(input_file, emission_time, emission_rate, vent);
+	fclose(input_file);
+
+	//verifica della consistenza del file e definisce il vettore vent
+	int error = defineVents(emission_rate, vent);
+	if (error || emission_rate_file_status != EMISSION_RATE_FILE_OK){
+		std::string err= "Error verifyng the consistency of the emission rate and vents: ";
+		fatalErrorExit(err.c_str());
+	}
+
+	return true;
+}
+//---------------------------------------------------------------------------
+
+bool CA_HOST::loadVents(sPATH path){
+	FILE *input_file;
+	if ( ( input_file = fopen(path.c_str(),"r") ) == NULL){
+		std::string err= "Error opening the vent file: ";
+		err+=path;
+		fatalErrorExit(err.c_str());
+	}
+
+
+
+	//Alloca e legge
+	int** tempMatrix=NULL;
+	tempMatrix = allocateMatrix(tempMatrix, h_NC, h_NR);
+	if(!tempMatrix) fatalErrorExit("UNABLE TO ALLOCATE MEMORY");
+	tempMatrix = readMatrix(tempMatrix, h_NC, h_NR, input_file);
+	fclose(input_file);
+
+
+	initVents(tempMatrix, h_NC, h_NR, this->vent);
+
+	deAllocateMatrix(tempMatrix,h_NC,h_NR);
+	return true;
+}
+//---------------------------------------------------------------------------
 
 /**
  * Allocate
@@ -571,6 +681,14 @@ void CA_HOST::copyParametersFromCA_HOST_to_CA_GPU(CA_GPU* h_CAGPU){
 	h_CAGPU->d_Pepsilon 		= this->h_Pepsilon;
 	h_CAGPU->d_Psigma 			= this->h_Psigma;
 	h_CAGPU->d_Pcv 				= this->h_Pcv;
+
+	//sim time init =0
+	h_CAGPU->d_sim_elapsed_time		= 0.0;
+	//vents and emission rate
+	h_CAGPU->emission_time		= this->emission_time;
+	h_CAGPU->numVents			= this->vent.size();
+	h_CAGPU->emissionRate_size	= this->emission_rate[0].size();
+
 }
 
 /**
@@ -606,9 +724,9 @@ void CA_HOST::saveSubstateOnFile (const char* path,int substate)
 	}
 }
 
- void CA_HOST::saveSubstatesOnFile (sPATH outputFolderRoot){
-	 std::string savepath;
-	 //save QUOTE
+void CA_HOST::saveSubstatesOnFile (sPATH outputFolderRoot){
+	std::string savepath;
+	//save QUOTE
 	savepath=outputFolderRoot+"QUOTE.out.sst";
 	saveSubstateOnFile(savepath.c_str(),QUOTE);
 	//save THICKNESS

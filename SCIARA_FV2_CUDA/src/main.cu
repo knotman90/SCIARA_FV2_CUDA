@@ -28,15 +28,33 @@ void hostInitialize(int argc, char *argv[]){
 //##### TRANSITION FUNCTION KERNELS ######
 
 __global__ void printSubstateG(CA_GPU* d_CA, int substate){
-	d_CA->printSubstate(0);
+	//d_CA->printSubstate(0);
+	printf("NUM of vents: %u ",d_CA->numVents);
+	for(int i =0;i<d_CA->numVents;i++){
+		printf("(%u %u)\n",d_CA->coordVents[i*2],d_CA->coordVents[i*2+1]);
+	}
+
+	for(int i =0;i<d_CA->numVents;i++){
+		for(int j=0;j<d_CA->emissionRate_size;j++){
+			printf("\tEMISSION RATE vent %u time %u -> %f\n",i,j,d_CA->emissionRates[d_CA->emissionRate_size*i+j]);
+		}
+	}
 }
 
 /**
- * Lava emission from vents
+ * Lava emission from vents.
+ * This kernel should be launched with wust one block in 1D
+ * (on X dimension) and with the number of threads equals to the number of
+ * vents (parameter numVents)
  * @param d_CA
  */
 __global__ void emitLavaFromVents(CA_GPU* d_CA){
 
+	if(blockIdx.x==0 && blockIdx.y==0){
+			if(threadIdx.x < d_CA->numVents && threadIdx.y==0){
+				d_CA->emitLavaFromVent(threadIdx.x);
+			}
+	}
 }
 
 /**
@@ -80,8 +98,9 @@ __global__ void copyMatrices(CA_GPU* d_CA){
 }
 
 //#######################################
+unsigned int nVents;
 void globalTransitionFunction(){
-
+	emitLavaFromVents<<<1,nVents>>>(d_CA);
 }
 
 
@@ -91,6 +110,7 @@ int main ( int argc, char *argv[] ){
 	hostInitialize(argc,argv);
 	//configure CA HOST
 	h_CA.simulationInit();
+	nVents = h_CA.getNumVents();
 
 	h_CA.loadSubstates();
 	h_CA.printParameters();
@@ -100,6 +120,8 @@ int main ( int argc, char *argv[] ){
 /*
  * GLOBAL TRANSITION FUNCTION ON GPU
  */
+
+	globalTransitionFunction();
 
 	h_CA.copyBackFromGPU(d_CA);
 	h_CA.saveSubstatesOnFile(h_CA.getDataFolder()+"/output/");

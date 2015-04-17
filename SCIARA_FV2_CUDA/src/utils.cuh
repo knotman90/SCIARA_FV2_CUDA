@@ -10,11 +10,32 @@
 #include<string.h>
 #include<iostream>
 
+//the last enum is just used to have the total number of substates! DO NOT USE IT IN PRODUCTION!
+enum SubstatesNames {QUOTE=0,THICKNESS,TEMPERATURE,SOLIDIFIED,FLOWN,FLOWO,FLOWE,FLOWS, FLOWNO, FLOWSO, FLOWSE,FLOWNE,NUMBEROFSUBSTATES};
+
+
+inline __host__ __device__
+int get_X_LinearIdxVentCoord(int ventIdx){
+	return ventIdx*2;
+}
+inline __host__ __device__
+int get_Y_LinearIdxVentCoord(int ventIdx){
+	return ventIdx*2+1;
+}
+
+/**
+ * 2D Coordinates
+ */
+template <class T>
+struct pair{
+	T x;
+	T y;
+};
+typedef pair<int> coord;
+
 /** utility function to compute the grid size */
 __host__ int divup(int x, int y) { return x / y + (x % y ? 1 : 0); }
 
-//the last enum is just used to have the total number of substates! DO NOT USE IT IN PRODUCTION!
-enum SubstatesNames {QUOTE=0,THICKNESS,TEMPERATURE,SOLIDIFIED,FLOWN,FLOWO,FLOWE,FLOWS, FLOWNO, FLOWSO, FLOWSE,FLOWNE,NUMBEROFSUBSTATES};
 
 void fatalErrorExit(const char* errmsg){
 	fprintf(stderr,"FATAL ERROR: %s\nEXITING",errmsg);

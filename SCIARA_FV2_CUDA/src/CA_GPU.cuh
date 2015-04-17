@@ -8,8 +8,11 @@
 #ifndef CA_GPU_CUH_
 #define CA_GPU_CUH_
 class CA_GPU{
-	 friend class CA_HOST;
+	friend class CA_HOST;
 private:
+	//#############################  CA VARIABLES (DEVICE)  ##########################
+	double d_sim_elapsed_time; //tempo trascorso dall'inizio della simulazione [s]
+
 	//#############################  CA PARAMETERS (DEVICE)  ##########################
 	//																				#
 	//									 											#
@@ -50,29 +53,69 @@ private:
 	double* d_sbts_updated; //linearized substates
 
 public:
+	//### VENTS MANAGEMENT AND EMISSION RATES ###########################
+	unsigned int emission_time;
+	unsigned int numVents;
+	unsigned int emissionRate_size;
+	int *coordVents;//dim=2*numVents
+	double * emissionRates;//dim=numVents*sizeEmissionRate;
+	//###################################################################
+
 	//#############################  CA FUNCTIONS (DEVICE)  ##########################
 	CA_GPU(){};//default constructor
 	__host__ void printParameters();
 
 
-//### KERNELS AND GPU CODE FOR THE TRANSITION FUNCTION #####
+	//### KERNELS AND GPU CODE FOR THE TRANSITION FUNCTION #####
 	__device__ int d_getIdx(int x, int y, int substate)	{
 		return ( (d_NUMCELLS * substate)  +   (x * d_NC) + y );
 	}
 
 	__device__ void printSubstate(int substate);
 
+	__device__ double ventThickness(unsigned int vent);
+	__device__ void emitLavaFromVent(unsigned int vent);
 
 };
 
-__device__ void CA_GPU::printSubstate(int substate){
-		for(int i=0;i<10;i++){
-			for (int j = 0; j < 10; j++) {
-				printf("%.3f ",d_sbts_current[d_getIdx(i,j,0)]);
-			}
-			printf("\n");
-		}
+__device__ double CA_GPU::ventThickness(unsigned int vent){
+	unsigned int i;
+	i = (unsigned int) (d_sim_elapsed_time / emission_time);
+	if (i >= emissionRate_size)
+		return 0;
+	else
+		return emissionRates[vent*emissionRate_size+i] / d_Pac * d_Pclock;
+}
+
+
+__device__ void CA_GPU::emitLavaFromVent(unsigned int vent){
+	double emitted_lava = 0;
+	//slt = lava thickness current
+
+	//emit lava
+	emitted_lava = ventThickness(vent);
+	if (emitted_lava > 0) {
+		int x = get_X_LinearIdxVentCoord(vent);
+		int y = get_Y_LinearIdxVentCoord(vent);
+		int cellIdx = d_getIdx(x,y,THICKNESS);
+		d_sbts_current[cellIdx] += emitted_lava;
+		d_sbts_updated[cellIdx] = d_sbts_current[cellIdx];
+
+		d_sbts_current[d_getIdx(x,y,TEMPERATURE)] = d_PTvent;
+		d_sbts_updated[d_getIdx(x,y,TEMPERATURE)] = d_PTvent;
 	}
+
+}
+
+
+__device__ void CA_GPU::printSubstate(int substate){
+	for(int i=0;i<10;i++){
+		for (int j = 0; j < 10; j++) {
+			printf("%.3f ",d_sbts_current[d_getIdx(i,j,0)]);
+		}
+		printf("\n");
+	}
+}
 //---------------------------------------------------------------------------
 __host__ void CA_GPU::printParameters()
 {

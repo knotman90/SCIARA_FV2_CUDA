@@ -10,8 +10,14 @@
 #include<string.h>
 #include<iostream>
 
+//#####MATH DEFINES####
+#define RAD2 (1.41421356237)
+
 //the last enum is just used to have the total number of substates! DO NOT USE IT IN PRODUCTION!
-enum SubstatesNames {QUOTE=0,THICKNESS,TEMPERATURE,SOLIDIFIED,FLOWN,FLOWO,FLOWE,FLOWS, FLOWNO, FLOWSO, FLOWSE,FLOWNE,NUMBEROFSUBSTATES};
+#define VON_NEUMANN_NEIGHBORS	(5)
+#define MOORE_NEIGHBORS		(9)
+
+enum SubstatesNames {ALTITUDE=0,THICKNESS,TEMPERATURE,SOLIDIFIED,FLOWN,FLOWO,FLOWE,FLOWS, FLOWNO, FLOWSO, FLOWSE,FLOWNE,NUMBEROFSUBSTATES};
 
 
 inline __host__ __device__
@@ -34,6 +40,7 @@ struct pair{
 typedef pair<int> coord;
 
 /** utility function to compute the grid size */
+inline
 __host__ int divup(int x, int y) { return x / y + (x % y ? 1 : 0); }
 
 
@@ -43,6 +50,16 @@ void fatalErrorExit(const char* errmsg){
 
 }
 
+
+void computeKernelLaunchParameter(unsigned int threadsBlockX,unsigned int threadsBlockY,
+								  unsigned int cellsX,unsigned int cellsY, dim3 &dimGrid
+								){
+
+dimGrid.x = divup(cellsX,threadsBlockX);
+dimGrid.y = divup(cellsY,threadsBlockY);
+
+
+}
 
 
 

@@ -6,8 +6,14 @@
 #include "utils.cuh"
 
 //###############################
+
+//####  GLOBAL VARIABLES  #########
 CA_HOST h_CA;
 CA_GPU* d_CA;
+
+dim3 dimBlock;
+dim3 dimGrid;
+//###############################
 /**
  * Parse the command line argument and consequently sets
  * the appropriate file paths for the parameters of the simulation.
@@ -51,9 +57,9 @@ __global__ void printSubstateG(CA_GPU* d_CA, int substate){
 __global__ void emitLavaFromVents(CA_GPU* d_CA){
 
 	if(blockIdx.x==0 && blockIdx.y==0){
-			if(threadIdx.x < d_CA->numVents && threadIdx.y==0){
-				d_CA->emitLavaFromVent(threadIdx.x);
-			}
+		if(threadIdx.x < d_CA->numVents && threadIdx.y==0){
+			d_CA->emitLavaFromVent(threadIdx.x);
+		}
 	}
 }
 
@@ -62,7 +68,7 @@ __global__ void emitLavaFromVents(CA_GPU* d_CA){
  * @param d_CA
  */
 __global__ void temperatureInitialization(CA_GPU* d_CA){
-
+	d_CA->cellTemperatureInitialize();
 }
 
 /**
@@ -70,7 +76,7 @@ __global__ void temperatureInitialization(CA_GPU* d_CA){
  * @param d_CA
  */
 __global__ void computeFlows(CA_GPU* d_CA){
-
+	d_CA->empiricalFlows();
 }
 
 /**
@@ -78,7 +84,7 @@ __global__ void computeFlows(CA_GPU* d_CA){
  * @param d_CA
  */
 __global__ void reduceFlows(CA_GPU* d_CA){
-
+	d_CA->distribuiteFlows();
 }
 
 /**
@@ -100,7 +106,18 @@ __global__ void copyMatrices(CA_GPU* d_CA){
 //#######################################
 unsigned int nVents;
 void globalTransitionFunction(){
+	////kernel launch parameters settings
+	dimBlock.x=8;
+	dimBlock.y=8;
+	computeKernelLaunchParameter(dimBlock.x,dimBlock.y,h_CA.getNr(),h_CA.getNc(),dimGrid);
+
+
+	//for(int i=0;i<100;i++){
 	emitLavaFromVents<<<1,nVents>>>(d_CA);
+	temperatureInitialization<<<dimGrid,dimBlock>>>(d_CA);
+	computeFlows<<<dimGrid,dimBlock>>>(d_CA);
+	//}
+
 }
 
 
@@ -117,11 +134,18 @@ int main ( int argc, char *argv[] ){
 
 	d_CA=h_CA.deviceCAGPUInitialization();
 
-/*
- * GLOBAL TRANSITION FUNCTION ON GPU
- */
+
+
+
+	/*
+	 * GLOBAL TRANSITION FUNCTION ON GPU
+	 */
 
 	globalTransitionFunction();
+
+
+
+
 
 	h_CA.copyBackFromGPU(d_CA);
 	h_CA.saveSubstatesOnFile(h_CA.getDataFolder()+"/output/");

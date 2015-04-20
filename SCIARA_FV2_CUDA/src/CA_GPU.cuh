@@ -67,17 +67,120 @@ public:
 
 
 	//### KERNELS AND GPU CODE FOR THE TRANSITION FUNCTION #####
+	__inline__
+	__device__ int getMooreNeighIdx_X(int row, int neighIdx);
+
+	__inline__
+	__device__ int getMooreNeighIdx_Y(int col, int neighIdx);
+
+	__inline__
 	__device__ int d_getIdx(int x, int y, int substate)	{
 		return ( (d_NUMCELLS * substate)  +   (x * d_NC) + y );
 	}
 
+	__inline
+	__device__ bool isWithinCABounds(int row, int col);
+
+	__inline__
 	__device__ void printSubstate(int substate);
 
+	//vent emission--------------------------------------------
+	__inline__
 	__device__ double ventThickness(unsigned int vent);
+
+	__inline__
 	__device__ void emitLavaFromVent(unsigned int vent);
+	//----------------------------------------------------------
 
-};
+	__inline__
+	__device__ void cellTemperatureInitialize();
 
+
+	__device__ void empiricalFlows();
+
+	__device__ double __inline__ PowerLaw(double k1, double k2, double T){
+		return exp10(k1 + k2*T);
+	}
+	__device__ void distribuiteFlows();
+
+
+
+};//end definition of CA_GPU
+
+__device__ void CA_GPU::distribuiteFlows(){
+	//get cell coordinates
+	int row = blockIdx.y * blockDim.y + threadIdx.y;
+	int col = blockIdx.x * blockDim.x + threadIdx.x;
+
+	if(isWithinCABounds(row,col)){
+		double new_tick = d_sbts_updated[d_getIdx(row,col,THICKNESS)];
+		//flown(x,y) has to be added comes from the sud cell
+		//flows(neighbor1) has to be substracted because is the amount of lava that the current cell
+		//transfer to the upper cell
+//same hold for the other pair of indices
+
+
+		//NORD
+		new_tick-= d_sbts_updated[d_getIdx(row,col,FLOWN)] -
+				d_sbts_updated[d_getIdx(getMooreNeighIdx_X(row,1),getMooreNeighIdx_Y(col,1),FLOWS)];
+	}
+}
+
+/**
+ * Return the X coordinate of the neigh number neighIdx
+         5 | 1 | 8
+        ---|---|---
+         2 | 0 | 3
+        ---|---|---
+         6 | 4 | 7
+ */
+__inline__
+__device__ int CA_GPU::getMooreNeighIdx_X(int row, int neighIdx){
+	if(neighIdx==0 || neighIdx==2 || neighIdx == 3)
+		return row;
+
+	if(neighIdx==1 || neighIdx==5 || neighIdx == 8)
+		return row-1;
+
+	//implicit else if(neighIdx==4 || neighIdx==6 || neighIdx == 7)
+	return row+1;
+}
+
+
+/**
+ * Return the Y coordinate of the neigh number neighIdx
+         5 | 1 | 8
+        ---|---|---
+         2 | 0 | 3
+        ---|---|---
+         6 | 4 | 7
+ */
+__inline__
+__device__ int CA_GPU::getMooreNeighIdx_Y(int col, int neighIdx){
+	if(neighIdx==0 || neighIdx==1 || neighIdx == 4)
+		return col;
+
+	if(neighIdx==2 || neighIdx==5 || neighIdx == 6)
+		return col-1;
+
+	//implicit else if(neighIdx==3 || neighIdx==7 || neighIdx == 8)
+	return col+1;
+
+}
+
+
+
+
+__inline
+__device__ bool CA_GPU::isWithinCABounds(int row, int col){
+
+	return
+			(row>=0 && row <= (d_NR-1)) &&
+			col>=0 && col <= (d_NC-1);
+}
+
+
+__inline__
 __device__ double CA_GPU::ventThickness(unsigned int vent){
 	unsigned int i;
 	i = (unsigned int) (d_sim_elapsed_time / emission_time);
@@ -88,6 +191,7 @@ __device__ double CA_GPU::ventThickness(unsigned int vent){
 }
 
 
+__inline__
 __device__ void CA_GPU::emitLavaFromVent(unsigned int vent){
 	double emitted_lava = 0;
 	//slt = lava thickness current
@@ -108,6 +212,131 @@ __device__ void CA_GPU::emitLavaFromVent(unsigned int vent){
 }
 
 
+__inline__
+__device__ void CA_GPU::cellTemperatureInitialize(){
+	//get cell coordinates
+	int row = blockIdx.y * blockDim.y + threadIdx.y;
+	int col = blockIdx.x * blockDim.x + threadIdx.x;
+
+	if(isWithinCABounds(row,col)){
+
+		//current cell temperature
+		double temp = d_sbts_current[d_getIdx(row,col,TEMPERATURE)];
+
+		if(temp>=0)
+			d_sbts_updated[d_getIdx(row,col,TEMPERATURE)] = temp*temp;
+
+		return;
+	}
+
+}
+
+__device__ void CA_GPU::empiricalFlows(){
+	int row = blockIdx.y * blockDim.y + threadIdx.y;
+	int col = blockIdx.x * blockDim.x + threadIdx.x;
+	if(isWithinCABounds(row,col)){
+
+		if (d_sbts_current[d_getIdx(row,col,THICKNESS)] > 0) {
+
+			bool n_eliminated[MOORE_NEIGHBORS];
+			double z[MOORE_NEIGHBORS];
+			double h[MOORE_NEIGHBORS];
+			double H[MOORE_NEIGHBORS];
+			double theta[MOORE_NEIGHBORS];
+			double w[MOORE_NEIGHBORS];		//Distances between central and adjecent cells
+			double Pr[MOORE_NEIGHBORS];		//Relaxation rate array
+			bool loop;
+			int counter,i,j;
+			double avg;
+			double _w,_Pr,hc;
+			_w 	= d_Pc;
+			_Pr = PowerLaw(d_a, d_b, d_sbts_current[d_getIdx(row,col,TEMPERATURE)]);
+			hc 	= PowerLaw(d_c, d_d, d_sbts_current[d_getIdx(row,col,TEMPERATURE)]);
+
+#pragma loop unroll
+			for ( i = 0; i < MOORE_NEIGHBORS; i++) {
+
+				h[i] = d_sbts_current[d_getIdx(getMooreNeighIdx_X(row,i),getMooreNeighIdx_Y(col,i),THICKNESS)] ;
+				H[i]  = theta[i] = 0;
+				w[i] = _w;
+				Pr[i] = _Pr;
+
+				if (i < VON_NEUMANN_NEIGHBORS)
+					z[i] = d_sbts_current[d_getIdx(getMooreNeighIdx_X(row,i),getMooreNeighIdx_Y(col,i),ALTITUDE)] ;
+				else
+					//val - (val-valNeigh_I)/rad2
+					z[i]= d_sbts_current[d_getIdx(row,col,ALTITUDE)] -
+					(
+							d_sbts_current[d_getIdx(row,col,ALTITUDE)] -
+							d_sbts_current[d_getIdx(getMooreNeighIdx_X(row,i),getMooreNeighIdx_Y(col,i),ALTITUDE)]
+
+					)/RAD2;
+			}//for
+
+			H[0] = z[0];
+			n_eliminated[0]=true;
+#pragma loop unroll
+			for ( i = 1; i < MOORE_NEIGHBORS; i++){
+				/*//Donato's code is commented here while Giuseppe's not
+				//Stick with official Donato version
+				if ((z[0] > z[i]) && (h[0] >= h[i]))
+				{
+					H[i] = z[i];
+					theta[i] = atan( (z[0] - z[i]) / w[i] );
+					n_eliminated[i]=true;
+				}
+				else*/
+				if ( z[0]+h[0] > z[i]+h[i] ){
+					H[i] = z[i] + h[i];
+					theta[i] = atan( ((z[0]+h[0]) - (z[i]+h[i])) / w[i] );
+					n_eliminated[i]=true;
+				}else
+					n_eliminated[i]=false;
+			}//for
+
+			do {
+				loop = false;
+				avg = h[0];
+				counter = 0;
+#pragma loop unroll
+				for ( j = 0; j < MOORE_NEIGHBORS; j++)
+					if (n_eliminated[j]) {
+						avg += H[j];
+						counter++;
+					}
+				if (counter != 0)
+					avg = avg / double(counter);
+#pragma loop unroll
+				for ( j = 0; j < MOORE_NEIGHBORS; j++)
+					if (n_eliminated[j] && avg <= H[j]) {
+						n_eliminated[j] = false;
+						loop = true;
+					}
+			} while (loop);
+
+			//now collect and save flows
+#pragma loop unroll
+			for (int i=1;i<MOORE_NEIGHBORS;i++)
+				if ( n_eliminated[i] && h[0] > hc*cos(theta[i]) )
+				{
+					//dd=Pr[i]*(avg - H[i]);
+					//d_updateCellValue(current,i+4,dd,x,y);
+					//FLOWN-1 return the substate just before the flows.
+					//i starts from 1 -> hence it only operates on the flows substates
+					d_sbts_updated[d_getIdx(row,col,FLOWN+i-1)]=Pr[i]*(avg - H[i]);
+				}
+				else
+					d_sbts_updated[d_getIdx(row,col,FLOWN+i-1)]=0;
+
+
+
+		}//d_sbts_current(THICKNESS)>0
+
+	}//isWithinCABounds
+}
+
+
+__inline__
 __device__ void CA_GPU::printSubstate(int substate){
 	for(int i=0;i<10;i++){
 		for (int j = 0; j < 10; j++) {
@@ -116,6 +345,10 @@ __device__ void CA_GPU::printSubstate(int substate){
 		printf("\n");
 	}
 }
+
+
+
+
 //---------------------------------------------------------------------------
 __host__ void CA_GPU::printParameters()
 {

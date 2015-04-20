@@ -129,6 +129,14 @@ public:
 	const sPATH& getDataFolder() const {
 		return s_data_folder;
 	}
+
+	int getNc() const {
+		return h_NC;
+	}
+
+	int getNr() const {
+		return h_NR;
+	}
 };
 
 
@@ -613,7 +621,7 @@ void CA_HOST::loadSubstateFromFile(ccPATH path, int substate){
  *  lava and restore the simulation.
  */
 void CA_HOST::loadSubstates(){
-	loadSubstateFromFile(s_morphology.c_str(),QUOTE);
+	loadSubstateFromFile(s_morphology.c_str(),ALTITUDE);
 }
 
 //---------------------------------------------------------------------------
@@ -728,7 +736,7 @@ void CA_HOST::saveSubstatesOnFile (sPATH outputFolderRoot){
 	std::string savepath;
 	//save QUOTE
 	savepath=outputFolderRoot+"QUOTE.out.sst";
-	saveSubstateOnFile(savepath.c_str(),QUOTE);
+	saveSubstateOnFile(savepath.c_str(),ALTITUDE);
 	//save THICKNESS
 	savepath=outputFolderRoot+"THICKNESS.out.sst";
 	saveSubstateOnFile(savepath.c_str(),THICKNESS);

@@ -112,11 +112,14 @@ void globalTransitionFunction(){
 	computeKernelLaunchParameter(dimBlock.x,dimBlock.y,h_CA.getNr(),h_CA.getNc(),dimGrid);
 
 
-	//for(int i=0;i<100;i++){
+	for(int i=0;i<1000;i++){
 	emitLavaFromVents<<<1,nVents>>>(d_CA);
 	temperatureInitialization<<<dimGrid,dimBlock>>>(d_CA);
 	computeFlows<<<dimGrid,dimBlock>>>(d_CA);
-	//}
+	reduceFlows<<<dimGrid,dimBlock>>>(d_CA);
+
+
+	}
 
 }
 
@@ -133,8 +136,6 @@ int main ( int argc, char *argv[] ){
 	h_CA.printParameters();
 
 	d_CA=h_CA.deviceCAGPUInitialization();
-
-
 
 
 	/*

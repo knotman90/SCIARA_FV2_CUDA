@@ -7,6 +7,7 @@
 
 #ifndef CA_GPU_CUH_
 #define CA_GPU_CUH_
+#include <math.h>
 class CA_GPU{
 	friend class CA_HOST;
 private:
@@ -49,8 +50,8 @@ private:
 	//###############################################################################
 
 	//double matrix strategy for CA substated evolution
-	double* d_sbts_current; //linearized substates
 	double* d_sbts_updated; //linearized substates
+	double* d_sbts_current; //linearized substates
 
 public:
 	//### VENTS MANAGEMENT AND EMISSION RATES ###########################
@@ -103,6 +104,9 @@ public:
 	}
 	__device__ void distribuiteFlows();
 
+	__inline__
+	__device__ double d_computeNewTemperature(double sommah, double sommath);
+
 
 
 };//end definition of CA_GPU
@@ -113,17 +117,80 @@ __device__ void CA_GPU::distribuiteFlows(){
 	int col = blockIdx.x * blockDim.x + threadIdx.x;
 
 	if(isWithinCABounds(row,col)){
-		double new_tick = d_sbts_updated[d_getIdx(row,col,THICKNESS)];
+		//newtick = subtract(sum of outflows) + sum(inflows)
+
+		double sommah=d_sbts_updated[d_getIdx(row,col,THICKNESS)];
+		double new_temp = d_sbts_updated[d_getIdx(row,col,TEMPERATURE)];
+		double sommath;
+
 		//flown(x,y) has to be added comes from the sud cell
 		//flows(neighbor1) has to be substracted because is the amount of lava that the current cell
 		//transfer to the upper cell
-//same hold for the other pair of indices
+		//same hold for the other pair of indices
+
+		//new_thick= -flowToNeigh + flowReceived
+		sommah-=
+				d_sbts_current[d_getIdx(row,col,FLOWN)]+
+				d_sbts_current[d_getIdx(row,col,FLOWS)]+
+				d_sbts_current[d_getIdx(row,col,FLOWE)]+
+				d_sbts_current[d_getIdx(row,col,FLOWO)]+
+				d_sbts_current[d_getIdx(row,col,FLOWNO)]+
+				d_sbts_current[d_getIdx(row,col,FLOWNE)]+
+				d_sbts_current[d_getIdx(row,col,FLOWSO)]+
+				d_sbts_current[d_getIdx(row,col,FLOWSE)];
 
 
-		//NORD
-		new_tick-= d_sbts_updated[d_getIdx(row,col,FLOWN)] -
-				d_sbts_updated[d_getIdx(getMooreNeighIdx_X(row,1),getMooreNeighIdx_Y(col,1),FLOWS)];
+		sommath= sommah * new_temp;
+		sommah+=
+				d_sbts_current[d_getIdx(getMooreNeighIdx_X(row,1),getMooreNeighIdx_Y(col,1),FLOWS)]+
+				d_sbts_current[d_getIdx(getMooreNeighIdx_X(row,4),getMooreNeighIdx_Y(col,4),FLOWN)]+
+				d_sbts_current[d_getIdx(getMooreNeighIdx_X(row,2),getMooreNeighIdx_Y(col,2),FLOWE)]+
+				d_sbts_current[d_getIdx(getMooreNeighIdx_X(row,3),getMooreNeighIdx_Y(col,3),FLOWO)]+
+				d_sbts_current[d_getIdx(getMooreNeighIdx_X(row,6),getMooreNeighIdx_Y(col,6),FLOWNE)]+
+				d_sbts_current[d_getIdx(getMooreNeighIdx_X(row,5),getMooreNeighIdx_Y(col,5),FLOWSE)]+
+				d_sbts_current[d_getIdx(getMooreNeighIdx_X(row,7),getMooreNeighIdx_Y(col,7),FLOWNO)]+
+				d_sbts_current[d_getIdx(getMooreNeighIdx_X(row,8),getMooreNeighIdx_Y(col,8),FLOWSO)];
+
+
+		sommath+=
+				d_sbts_updated[d_getIdx(getMooreNeighIdx_X(row,1),getMooreNeighIdx_Y(col,1),TEMPERATURE)]+
+				d_sbts_updated[d_getIdx(getMooreNeighIdx_X(row,4),getMooreNeighIdx_Y(col,4),TEMPERATURE)]+
+				d_sbts_updated[d_getIdx(getMooreNeighIdx_X(row,2),getMooreNeighIdx_Y(col,2),TEMPERATURE)]+
+				d_sbts_updated[d_getIdx(getMooreNeighIdx_X(row,3),getMooreNeighIdx_Y(col,3),TEMPERATURE)]+
+				d_sbts_updated[d_getIdx(getMooreNeighIdx_X(row,6),getMooreNeighIdx_Y(col,6),TEMPERATURE)]+
+				d_sbts_updated[d_getIdx(getMooreNeighIdx_X(row,5),getMooreNeighIdx_Y(col,5),TEMPERATURE)]+
+				d_sbts_updated[d_getIdx(getMooreNeighIdx_X(row,7),getMooreNeighIdx_Y(col,7),TEMPERATURE)]+
+				d_sbts_updated[d_getIdx(getMooreNeighIdx_X(row,8),getMooreNeighIdx_Y(col,8),TEMPERATURE)];
+
+
+		if(sommah >0){
+			//update thickness and temperature
+			double new_temp = d_computeNewTemperature(sommah,sommath);
+			d_sbts_current[d_getIdx(row,col,TEMPERATURE)]= new_temp;
+			d_sbts_current[d_getIdx(row,col,THICKNESS)]	 = sommah;
+
+			//quote increment due to solidification
+			if(new_temp<=d_PTsol){
+				double newQuote = d_sbts_updated[d_getIdx(row,col,ALTITUDE)]+d_sbts_current[d_getIdx(row,col,THICKNESS)];
+				double newSolid = d_sbts_updated[d_getIdx(row,col,SOLIDIFIED)]+d_sbts_current[d_getIdx(row,col,THICKNESS)];
+				d_sbts_current[d_getIdx(row,col,SOLIDIFIED)] = newSolid;
+				d_sbts_current[d_getIdx(row,col,THICKNESS)] = 0;
+				d_sbts_current[d_getIdx(row,col,TEMPERATURE)] = d_PTsol;
+			}
+
+		}else{
+			d_sbts_current[d_getIdx(row,col,THICKNESS)]	 = 0;
+		}
 	}
+}
+
+
+__inline__
+__device__ double CA_GPU::d_computeNewTemperature(double sommah, double sommath){
+	double new_temp = sommath/sommah;
+	double aus = 1.0 + (3 *  pow(new_temp, 3.0) * d_Pepsilon * d_Psigma * d_Pclock * d_Pcool) / (d_Prho * d_Pcv * sommah * d_Pac);
+	new_temp/= pow(aus,1.0/3.0);
+	return new_temp;
 }
 
 /**
@@ -201,12 +268,12 @@ __device__ void CA_GPU::emitLavaFromVent(unsigned int vent){
 	if (emitted_lava > 0) {
 		int x = get_X_LinearIdxVentCoord(vent);
 		int y = get_Y_LinearIdxVentCoord(vent);
-		int cellIdx = d_getIdx(x,y,THICKNESS);
-		d_sbts_current[cellIdx] += emitted_lava;
-		d_sbts_updated[cellIdx] = d_sbts_current[cellIdx];
+		int cellIdx=d_getIdx(x,y,THICKNESS);
+		d_sbts_updated[ cellIdx] += emitted_lava;
+		d_sbts_current[ cellIdx] = d_sbts_updated[cellIdx];
 
-		d_sbts_current[d_getIdx(x,y,TEMPERATURE)] = d_PTvent;
 		d_sbts_updated[d_getIdx(x,y,TEMPERATURE)] = d_PTvent;
+		d_sbts_current[d_getIdx(x,y,TEMPERATURE)] = d_PTvent;
 	}
 
 }
@@ -221,10 +288,11 @@ __device__ void CA_GPU::cellTemperatureInitialize(){
 	if(isWithinCABounds(row,col)){
 
 		//current cell temperature
-		double temp = d_sbts_current[d_getIdx(row,col,TEMPERATURE)];
+		double temp = d_sbts_updated[d_getIdx(row,col,TEMPERATURE)];
+		double thickness = d_sbts_updated[d_getIdx(row,col,THICKNESS)];
 
-		if(temp>=0)
-			d_sbts_updated[d_getIdx(row,col,TEMPERATURE)] = temp*temp;
+		if(thickness>=0)
+			d_sbts_current[d_getIdx(row,col,TEMPERATURE)] = thickness*temp;
 
 		return;
 	}
@@ -236,7 +304,7 @@ __device__ void CA_GPU::empiricalFlows(){
 	int col = blockIdx.x * blockDim.x + threadIdx.x;
 	if(isWithinCABounds(row,col)){
 
-		if (d_sbts_current[d_getIdx(row,col,THICKNESS)] > 0) {
+		if (d_sbts_updated[d_getIdx(row,col,THICKNESS)] > 0) {
 
 			bool n_eliminated[MOORE_NEIGHBORS];
 			double z[MOORE_NEIGHBORS];
@@ -250,25 +318,25 @@ __device__ void CA_GPU::empiricalFlows(){
 			double avg;
 			double _w,_Pr,hc;
 			_w 	= d_Pc;
-			_Pr = PowerLaw(d_a, d_b, d_sbts_current[d_getIdx(row,col,TEMPERATURE)]);
-			hc 	= PowerLaw(d_c, d_d, d_sbts_current[d_getIdx(row,col,TEMPERATURE)]);
+			_Pr = PowerLaw(d_a, d_b, d_sbts_updated[d_getIdx(row,col,TEMPERATURE)]);
+			hc 	= PowerLaw(d_c, d_d, d_sbts_updated[d_getIdx(row,col,TEMPERATURE)]);
 
 #pragma loop unroll
 			for ( i = 0; i < MOORE_NEIGHBORS; i++) {
 
-				h[i] = d_sbts_current[d_getIdx(getMooreNeighIdx_X(row,i),getMooreNeighIdx_Y(col,i),THICKNESS)] ;
+				h[i] = d_sbts_updated[d_getIdx(getMooreNeighIdx_X(row,i),getMooreNeighIdx_Y(col,i),THICKNESS)] ;
 				H[i]  = theta[i] = 0;
 				w[i] = _w;
 				Pr[i] = _Pr;
 
 				if (i < VON_NEUMANN_NEIGHBORS)
-					z[i] = d_sbts_current[d_getIdx(getMooreNeighIdx_X(row,i),getMooreNeighIdx_Y(col,i),ALTITUDE)] ;
+					z[i] = d_sbts_updated[d_getIdx(getMooreNeighIdx_X(row,i),getMooreNeighIdx_Y(col,i),ALTITUDE)] ;
 				else
 					//val - (val-valNeigh_I)/rad2
-					z[i]= d_sbts_current[d_getIdx(row,col,ALTITUDE)] -
+					z[i]= d_sbts_updated[d_getIdx(row,col,ALTITUDE)] -
 					(
-							d_sbts_current[d_getIdx(row,col,ALTITUDE)] -
-							d_sbts_current[d_getIdx(getMooreNeighIdx_X(row,i),getMooreNeighIdx_Y(col,i),ALTITUDE)]
+							d_sbts_updated[d_getIdx(row,col,ALTITUDE)] -
+							d_sbts_updated[d_getIdx(getMooreNeighIdx_X(row,i),getMooreNeighIdx_Y(col,i),ALTITUDE)]
 
 					)/RAD2;
 			}//for
@@ -323,14 +391,12 @@ __device__ void CA_GPU::empiricalFlows(){
 					//d_updateCellValue(current,i+4,dd,x,y);
 					//FLOWN-1 return the substate just before the flows.
 					//i starts from 1 -> hence it only operates on the flows substates
-					d_sbts_updated[d_getIdx(row,col,FLOWN+i-1)]=Pr[i]*(avg - H[i]);
+					d_sbts_current[d_getIdx(row,col,FLOWN+i-1)]=Pr[i]*(avg - H[i]);
 				}
 				else
-					d_sbts_updated[d_getIdx(row,col,FLOWN+i-1)]=0;
+					d_sbts_current[d_getIdx(row,col,FLOWN+i-1)]=0;
 
-
-
-		}//d_sbts_current(THICKNESS)>0
+		}//d_sbts_updated(THICKNESS)>0
 
 	}//isWithinCABounds
 }
@@ -340,7 +406,7 @@ __inline__
 __device__ void CA_GPU::printSubstate(int substate){
 	for(int i=0;i<10;i++){
 		for (int j = 0; j < 10; j++) {
-			printf("%.3f ",d_sbts_current[d_getIdx(i,j,0)]);
+			printf("%.3f ",d_sbts_updated[d_getIdx(i,j,0)]);
 		}
 		printf("\n");
 	}

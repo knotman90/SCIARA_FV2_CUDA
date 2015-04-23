@@ -741,7 +741,7 @@ void CA_HOST::saveSubstateOnFile (const char* path,int substate)
 	if ( file )	{
 		for(int row = 0; row < h_NR; row++){
 			for(int col = 0; col < h_NC; col++){
-				fprintf(file, "%f ",h_sbts[h_getIndexOfPosition(row,col,substate)]);
+				fprintf(file, "%.11f ",h_sbts[h_getIndexOfPosition(row,col,substate)]);
 			}
 			fprintf(file,"\n");
 		}

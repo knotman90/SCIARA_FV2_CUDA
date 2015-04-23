@@ -8,6 +8,8 @@
 #ifndef CA_GPU_CUH_
 #define CA_GPU_CUH_
 #include <math.h>
+#define DEB (0)
+
 class CA_GPU{
 	friend class CA_HOST;
 private:
@@ -218,16 +220,18 @@ __device__ void CA_GPU::distribuiteFlows(){
 		if(sommah >0){
 			//update thickness and temperature
 			double new_temp = d_computeNewTemperature(sommah,sommath);
-			printf("New thick/temp (%i,%i), %.5f,%.5f\n",row,col,sommah,sommath);
+			if(DEB) printf("New thick/temp (%i,%i), %.5f,%.5f\n",row,col,sommah,sommath);
 			d_sbts_current[d_getIdx(row,col,TEMPERATURE)]= new_temp;
 			d_sbts_current[d_getIdx(row,col,THICKNESS)]	 = sommah;
 
 			//printf("I am the thread (%d,%d,%d),%.9f\n",row,col,d_getIdx(row,col,TEMPERATURE),sommah);
 			//quote increment due to solidification
 			if(new_temp<=d_PTsol){
+				 if (DEB) printf("Solidified %i,%i %.5f\n",row,col,d_sbts_current[d_getIdx(row,col,THICKNESS)]);
 				double newQuote = d_sbts_updated[d_getIdx(row,col,ALTITUDE)]+d_sbts_current[d_getIdx(row,col,THICKNESS)];
 				double newSolid = d_sbts_updated[d_getIdx(row,col,SOLIDIFIED)]+d_sbts_current[d_getIdx(row,col,THICKNESS)];
 				d_sbts_current[d_getIdx(row,col,SOLIDIFIED)] = newSolid;
+				d_sbts_current[d_getIdx(row,col,ALTITUDE)] = newQuote;
 				d_sbts_current[d_getIdx(row,col,THICKNESS)] = 0;
 				d_sbts_current[d_getIdx(row,col,TEMPERATURE)] = d_PTsol;
 			}
@@ -329,7 +333,7 @@ __device__ void CA_GPU::emitLavaFromVent(unsigned int vent){
 		d_sbts_updated[cellIdx] = d_PTvent;
 		d_sbts_current[cellIdx] = d_PTvent;
 
-		printf("emitting lava (%d,%d), %f\n",x,y,emitted_lava);
+		if(DEB) printf("emitting lava (%d,%d), %f\n",x,y,emitted_lava);
 	}
 
 }
@@ -420,7 +424,7 @@ __device__ void CA_GPU::empiricalFlows(){
 				}else
 					n_eliminated[i]=false;
 
-				printf("(%i,%i),z%i=%.5f, eliminated=%i, theta=%.5f, H=%.5f, h=%.5f, w=%.5f\n",
+				if(DEB) printf("(%i,%i),z%i=%.5f, eliminated=%i, theta=%.5f, H=%.5f, h=%.5f, w=%.5f\n",
 						row,col,i,z[i],n_eliminated[i],theta[i],H[i],h[i],w[i]);
 			}//for
 
@@ -449,7 +453,7 @@ __device__ void CA_GPU::empiricalFlows(){
 			for (int i=1;i<MOORE_NEIGHBORS;i++)
 				if ( n_eliminated[i] && h[0] > hc*cos(theta[i]) )
 				{
-					printf("Flusso verso (%d,%d),%.9f,%.9f,%.9f, %.5f flow to %i, temp=%.5f\n",
+					if(DEB) printf("Flusso verso (%d,%d),%.9f,%.9f,%.9f, %.5f flow to %i, temp=%.5f\n",
 							row,col,avg,Pr[i],H[i],Pr[i]*(avg - H[i]),i,d_sbts_updated[d_getIdx(row,col,TEMPERATURE)]);
 					//dd=Pr[i]*(avg - H[i]);
 					//d_updateCellValue(current,i+4,dd,x,y);

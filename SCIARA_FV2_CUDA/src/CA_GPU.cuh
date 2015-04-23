@@ -149,7 +149,7 @@ __device__ void CA_GPU::swapMatrices(){
 
 	return;
 }
-
+#define EPISILON (0.0)
 //TODO unroll sums caching the flows values
 __device__ void CA_GPU::distribuiteFlows(){
 	//get cell coordinates
@@ -217,7 +217,7 @@ __device__ void CA_GPU::distribuiteFlows(){
 						d_sbts_current[d_getIdx(getMooreNeighIdx_X(row,8),getMooreNeighIdx_Y(col,8),FLOWSO)]);
 
 
-		if(sommah >0){
+		if(sommah > EPISILON){
 			//update thickness and temperature
 			double new_temp = d_computeNewTemperature(sommah,sommath);
 			if(DEB) printf("New thick/temp (%i,%i), %.5f,%.5f\n",row,col,sommah,sommath);
@@ -227,7 +227,7 @@ __device__ void CA_GPU::distribuiteFlows(){
 			//printf("I am the thread (%d,%d,%d),%.9f\n",row,col,d_getIdx(row,col,TEMPERATURE),sommah);
 			//quote increment due to solidification
 			if(new_temp<=d_PTsol){
-				 if (DEB) printf("Solidified %i,%i %.5f\n",row,col,d_sbts_current[d_getIdx(row,col,THICKNESS)]);
+				if (DEB) printf("Solidified %i,%i %.5f\n",row,col,d_sbts_current[d_getIdx(row,col,THICKNESS)]);
 				double newQuote = d_sbts_updated[d_getIdx(row,col,ALTITUDE)]+d_sbts_current[d_getIdx(row,col,THICKNESS)];
 				double newSolid = d_sbts_updated[d_getIdx(row,col,SOLIDIFIED)]+d_sbts_current[d_getIdx(row,col,THICKNESS)];
 				d_sbts_current[d_getIdx(row,col,SOLIDIFIED)] = newSolid;
@@ -237,7 +237,8 @@ __device__ void CA_GPU::distribuiteFlows(){
 			}
 
 		}else{
-			d_sbts_current[d_getIdx(row,col,THICKNESS)]	 = 0;
+			//d_sbts_current[d_getIdx(row,col,THICKNESS)]	 = 0;
+			//d_sbts_current[d_getIdx(row,col,THICKNESS)]	 = 0;
 		}
 	}
 }
@@ -247,7 +248,7 @@ __inline__
 __device__ double CA_GPU::d_computeNewTemperature(double sommah, double sommath){
 	double new_temp = sommath/sommah;
 	double aus = 1.0 + (3 *  pow(new_temp, 3.0) * d_Pepsilon * d_Psigma * d_Pclock * d_Pcool) / (d_Prho * d_Pcv * sommah * d_Pac);
-	new_temp/= pow(aus,1.0/3.0);
+	new_temp = new_temp /pow(aus,1.0/3.0);
 	return new_temp;
 }
 
@@ -305,6 +306,7 @@ __device__ bool CA_GPU::isWithinCABounds(int row, int col){
 
 __inline__
 __device__ double CA_GPU::ventThickness(unsigned int vent){
+
 	unsigned int i;
 	i = (unsigned int) (d_sim_elapsed_time / emission_time);
 	if (i >= emissionRate_size)
@@ -336,6 +338,10 @@ __device__ void CA_GPU::emitLavaFromVent(unsigned int vent){
 		if(DEB) printf("emitting lava (%d,%d), %f\n",x,y,emitted_lava);
 	}
 
+	if(threadIdx.x==0 && threadIdx.y==0){
+		d_sim_elapsed_time+=d_Pclock;
+	}
+
 }
 
 
@@ -349,7 +355,7 @@ __device__ void CA_GPU::cellTemperatureInitialize(){
 		//current cell temperature
 		double thickness = d_sbts_updated[d_getIdx(row,col,THICKNESS)];
 
-		if(thickness>0){
+		if(thickness>=0){
 			double temp = d_sbts_updated[d_getIdx(row,col,TEMPERATURE)];
 			d_sbts_current[d_getIdx(row,col,TEMPERATURE)] = thickness*temp;
 

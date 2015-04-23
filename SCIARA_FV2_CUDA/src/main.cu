@@ -120,7 +120,7 @@ void globalTransitionFunction(){
 	computeKernelLaunchParameter(dimBlock.x,dimBlock.y,h_CA.getNr(),h_CA.getNc(),dimGrid);
 
 //printSubstateG<<<dimGrid,dimBlock>>>(d_CA,THICKNESS);
-	for(int i=0;i<1000;i++){
+	for(int i=0;i<10000;i++){
 		emitLavaFromVents<<<1,nVents>>>(d_CA);
 		temperatureInitialization<<<dimGrid,dimBlock>>>(d_CA);
 		computeFlows<<<dimGrid,dimBlock>>>(d_CA);

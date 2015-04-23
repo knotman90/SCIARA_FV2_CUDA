@@ -720,8 +720,8 @@ void CA_HOST::copyParametersFromCA_HOST_to_CA_GPU(CA_GPU* h_CAGPU){
  */
 void CA_HOST::copyBackFromGPU(CA_GPU* d_CA){
 	//copy only sibstates quote, thickness and temperature
-	printf("Copying back %i substates\n",SOLIDIFIED);
-	CUDASAFECALL(cudaMemcpy(h_sbts,host_handle.d_sbts_updated,SOLIDIFIED*h_NUMCELLS*sizeof(double),cudaMemcpyDeviceToHost));
+	printf("Copying back %i substates\n",FLOWN);
+	CUDASAFECALL(cudaMemcpy(h_sbts,host_handle.d_sbts_updated,FLOWN*h_NUMCELLS*sizeof(double),cudaMemcpyDeviceToHost));
 
 }
 
@@ -741,7 +741,7 @@ void CA_HOST::saveSubstateOnFile (const char* path,int substate)
 	if ( file )	{
 		for(int row = 0; row < h_NR; row++){
 			for(int col = 0; col < h_NC; col++){
-				fprintf(file, "%.11f ",h_sbts[h_getIndexOfPosition(row,col,substate)]);
+				fprintf(file, "%.9f ",h_sbts[h_getIndexOfPosition(row,col,substate)]);
 			}
 			fprintf(file,"\n");
 		}

@@ -125,6 +125,9 @@ public:
 	}
 
 
+
+	__inline__
+		__host__ void copyMatricesMemCpyDevToDev();
 	//GETTER AND SETTERS
 	const sPATH& getDataFolder() const {
 		return s_data_folder;
@@ -139,6 +142,18 @@ public:
 	}
 };
 
+/**
+ * NOT A KERNEL OR DEVICE FUNCTION
+ * A call that operates on ca host CPU handle because it need to operate on the CPU pointers
+ * that points to memory locations (CA substates) on GPU
+ */
+
+
+__inline__
+void CA_HOST::copyMatricesMemCpyDevToDev(){
+	CUDASAFECALL (cudaMemcpy(host_handle.d_sbts_updated,host_handle.d_sbts_current,sizeof(double)*h_NR*h_NC*3,cudaMemcpyDeviceToDevice) );
+}
+
 
 /**
  * It first create an host copy of the GPU structure and copy all the parameter from CA_HOST
@@ -152,8 +167,8 @@ CA_GPU* CA_HOST::deviceCAGPUInitialization(){
 
 	copyParametersFromCA_HOST_to_CA_GPU(&host_handle);
 	deviceMemoryAllocation(&host_handle);
-	CUDASAFECALL (cudaMemcpy(host_handle.d_sbts_current,this->h_sbts,sizeof(double)*h_NUMCELLS,cudaMemcpyHostToDevice));
-	//cudaMemcpy(toBecopied.d_sbts_updated,this->h_sbts,sizeof(double)*h_NUMCELLS,cudaMemcpyHostToDevice);//probably unecessary
+	CUDASAFECALL (cudaMemcpy(host_handle.d_sbts_updated,this->h_sbts,sizeof(double)*h_NUMCELLS*NUMBEROFSUBSTATES,cudaMemcpyHostToDevice));
+	CUDASAFECALL (cudaMemcpy(host_handle.d_sbts_current,this->h_sbts,sizeof(double)*h_NUMCELLS*NUMBEROFSUBSTATES,cudaMemcpyHostToDevice));
 
 	//Copy vents coordinates and vents emission rates
 	//1) convert vents/emissionrate  vector to to linear array
@@ -494,13 +509,13 @@ void CA_HOST::simulationInit(){
 	if (!this->loadEmissionRate(s_emission_rate.c_str())) fatalErrorExit("Emission RATE INITIALIZATION ERROR");
 
 	//delete this
-	for (auto v : vent){
-		printf("Vent (%u,%u)\n",v.x(),v.y());
-	}
-
-	for(auto e: emission_rate){
-		e.print();
-	}
+//	for (auto v : vent){
+//		printf("Vent (%u,%u)\n",v.x(),v.y());
+//	}
+//
+//	for(auto e: emission_rate){
+//		e.print();
+//	}
 	//
 }
 
@@ -704,7 +719,9 @@ void CA_HOST::copyParametersFromCA_HOST_to_CA_GPU(CA_GPU* h_CAGPU){
  * @param d_CA
  */
 void CA_HOST::copyBackFromGPU(CA_GPU* d_CA){
-	CUDASAFECALL(cudaMemcpy(h_sbts,host_handle.d_sbts_current,h_NUMCELLS*sizeof(double),cudaMemcpyDeviceToHost));
+	//copy only sibstates quote, thickness and temperature
+	printf("Copying back %i substates\n",SOLIDIFIED);
+	CUDASAFECALL(cudaMemcpy(h_sbts,host_handle.d_sbts_updated,SOLIDIFIED*h_NUMCELLS*sizeof(double),cudaMemcpyDeviceToHost));
 
 }
 

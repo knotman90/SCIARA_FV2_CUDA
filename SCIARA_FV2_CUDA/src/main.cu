@@ -34,17 +34,7 @@ void hostInitialize(int argc, char *argv[]){
 //##### TRANSITION FUNCTION KERNELS ######
 
 __global__ void printSubstateG(CA_GPU* d_CA, int substate){
-	//d_CA->printSubstate(0);
-	printf("NUM of vents: %u ",d_CA->numVents);
-	for(int i =0;i<d_CA->numVents;i++){
-		printf("(%u %u)\n",d_CA->coordVents[i*2],d_CA->coordVents[i*2+1]);
-	}
-
-	for(int i =0;i<d_CA->numVents;i++){
-		for(int j=0;j<d_CA->emissionRate_size;j++){
-			printf("\tEMISSION RATE vent %u time %u -> %f\n",i,j,d_CA->emissionRates[d_CA->emissionRate_size*i+j]);
-		}
-	}
+	d_CA->printSubstate(substate);
 }
 
 /**
@@ -81,6 +71,9 @@ __global__ void computeFlows(CA_GPU* d_CA){
 
 /**
  * Flows reduction
+ * It computes the new values of thicknes based on the previous step of
+ * computation, hence the calculation of the outflows
+ * It also compute the new lava temperature and handle the lava solidification
  * @param d_CA
  */
 __global__ void reduceFlows(CA_GPU* d_CA){
@@ -95,13 +88,28 @@ __global__ void temperatureUpdate(CA_GPU* d_CA){
 
 }
 
+/** NOT A KERNEL!
+ * Copy matrix.
+ * Hard Swap the content  current and updated matrix
+ * Lanches a kernel in which thread explicitly copy the matrices from
+ * the current to the updated version
+ * @param d_CA
+ */
+// void copyMatricesMemCpyDevToDev(CA_GPU* d_CA){
+//	h_CA->copyMatricesMemCpyDevToDev();
+//}
+
 /**
- * Copy matrix. Hard Swap the content  current and updated matrix
+ * Copy matrix.
+ * Hard Swap the content  current and updated matrix
+ * Lanches a kernel in which thread explicitly copy the matrices from
+ * the current to the updated version
  * @param d_CA
  */
 __global__ void copyMatrices(CA_GPU* d_CA){
-
+	d_CA->swapMatrices();
 }
+
 
 //#######################################
 unsigned int nVents;
@@ -111,14 +119,14 @@ void globalTransitionFunction(){
 	dimBlock.y=8;
 	computeKernelLaunchParameter(dimBlock.x,dimBlock.y,h_CA.getNr(),h_CA.getNc(),dimGrid);
 
-
-	for(int i=0;i<1000;i++){
-	emitLavaFromVents<<<1,nVents>>>(d_CA);
-	temperatureInitialization<<<dimGrid,dimBlock>>>(d_CA);
-	computeFlows<<<dimGrid,dimBlock>>>(d_CA);
-	reduceFlows<<<dimGrid,dimBlock>>>(d_CA);
-
-
+//printSubstateG<<<dimGrid,dimBlock>>>(d_CA,THICKNESS);
+	for(int i=0;i<10;i++){
+		emitLavaFromVents<<<1,nVents>>>(d_CA);
+		temperatureInitialization<<<dimGrid,dimBlock>>>(d_CA);
+		computeFlows<<<dimGrid,dimBlock>>>(d_CA);
+		reduceFlows<<<dimGrid,dimBlock>>>(d_CA);
+		//h_CA.copyMatricesMemCpyDevToDev();
+		copyMatrices<<<dimGrid,dimBlock>>>(d_CA);
 	}
 
 }
@@ -133,7 +141,7 @@ int main ( int argc, char *argv[] ){
 	nVents = h_CA.getNumVents();
 
 	h_CA.loadSubstates();
-	h_CA.printParameters();
+//	h_CA.printParameters();
 
 	d_CA=h_CA.deviceCAGPUInitialization();
 
@@ -144,7 +152,7 @@ int main ( int argc, char *argv[] ){
 
 	globalTransitionFunction();
 
-
+	cudaDeviceSynchronize();
 
 
 

@@ -12,13 +12,19 @@
 
 class CA_GPU{
 	friend class CA_HOST;
+public:
+	//ADAPTIVE GRID
+	 uint* h_d_adaptive_grid; //managed cuda Unified address
 private:
+
+
 	//#############################  CA VARIABLES (DEVICE)  ##########################
 	double d_sim_elapsed_time; //tempo trascorso dall'inizio della simulazione [s]
 
 	//#############################  CA PARAMETERS (DEVICE)  ########################
 	//																				#
-	//									 											#
+	//																				#
+	int d_nSteps;//																	#
 	int d_NR;	//numbers of rows													#
 	int d_NC;	//numbers of column													#
 	int d_NUMCELLS; //number of cells = d_NR*d_NC									#
@@ -83,6 +89,10 @@ public:
 
 	__inline
 	__device__ bool isWithinCABounds(int row, int col);
+
+	__inline
+	__device__ bool isWithinCABounds_AG(int row, int col );
+
 
 	__inline__
 	__device__ void printSubstate(int substate);
@@ -301,6 +311,23 @@ __device__ bool CA_GPU::isWithinCABounds(int row, int col){
 	return
 			(row>=0 && row <= (d_NR-1)) &&
 			col>=0 && col <= (d_NC-1);
+}
+
+/**
+ * Chack if a threads is in the boundaries
+ * described by the adaptive grid boundaries
+ * h_d_adaptive_grid
+ * @param row
+ * @param col
+ * @param
+ * @return
+ */
+__inline
+__device__ bool CA_GPU::isWithinCABounds_AG(int row, int col ){
+
+	return
+			(row>=h_d_adaptive_grid[X_START] && row <= h_d_adaptive_grid[X_END]) &&
+			col>=h_d_adaptive_grid[Y_START] && col <= h_d_adaptive_grid[Y_END];
 }
 
 

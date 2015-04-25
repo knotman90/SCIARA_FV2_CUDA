@@ -29,6 +29,11 @@ typedef  std::string sPATH;
 class CA_HOST{
 public:
 	CA_GPU host_handle; //HOST handle that contains GPUallocated pointer (needed to call free!)
+
+//ADAPTIVE GRID
+ uint* h_d_adaptive_grid; //managed cuda Unified address
+
+
 private:
 	sPATH s_data_folder;
 	sPATH s_parameters;
@@ -48,7 +53,8 @@ private:
 
 	//#############################  CA PARAMETERS (HOST)  ##########################
 	//																				#
-	//									 											#
+	//																				#
+	int h_nSteps;//									 								#
 	int h_NR;	//numbers of rows													#
 	int h_NC;	//numbers of column													#
 	int h_NUMCELLS; //number of cells = h_NR*h_NC									#
@@ -127,7 +133,7 @@ public:
 
 
 	__inline__
-		__host__ void copyMatricesMemCpyDevToDev();
+	__host__ void copyMatricesMemCpyDevToDev();
 	//GETTER AND SETTERS
 	const sPATH& getDataFolder() const {
 		return s_data_folder;
@@ -140,6 +146,9 @@ public:
 	int getNr() const {
 		return h_NR;
 	}
+
+	int getNSteps() const;
+	void setNSteps(int nSteps);
 };
 
 /**
@@ -165,8 +174,8 @@ void CA_HOST::copyMatricesMemCpyDevToDev(){
  */
 CA_GPU* CA_HOST::deviceCAGPUInitialization(){
 
-	copyParametersFromCA_HOST_to_CA_GPU(&host_handle);
 	deviceMemoryAllocation(&host_handle);
+	copyParametersFromCA_HOST_to_CA_GPU(&host_handle);
 	CUDASAFECALL (cudaMemcpy(host_handle.d_sbts_updated,this->h_sbts,sizeof(double)*h_NUMCELLS*NUMBEROFSUBSTATES,cudaMemcpyHostToDevice));
 	CUDASAFECALL (cudaMemcpy(host_handle.d_sbts_current,this->h_sbts,sizeof(double)*h_NUMCELLS*NUMBEROFSUBSTATES,cudaMemcpyHostToDevice));
 
@@ -208,6 +217,10 @@ bool CA_HOST::deviceMemoryAllocation(CA_GPU* d_CA){
 	//ventsAnd emissionRate
 	CUDASAFECALL(cudaMalloc(&d_CA->coordVents,sizeof(int)*vent.size()*2));//coordinate vents1D(unsigned int)
 	CUDASAFECALL(cudaMalloc(&d_CA->emissionRates,sizeof(double)*emission_rate[0].size()*vent.size()));//coordinate vents(int)
+
+	//allocate space for managed cuda unified memory address for adaptive grid
+	CUDASAFECALL( cudaMallocManaged(&h_d_adaptive_grid,sizeof(uint)*4) );
+	CUDASAFECALL(cudaMemset(h_d_adaptive_grid,0,4));
 	return true;
 }
 
@@ -225,12 +238,16 @@ void CA_HOST::deviceMemoryFree(CA_GPU* d_CA){		//Device memory free
 
 	CUDASAFECALL( cudaFree(d_CA));
 
+	CUDASAFECALL( cudaFree(h_d_adaptive_grid));
+
+
 }
 /**
  * Default Constructor for the HOST-SIDE CA data struct
  * @return void
  */
 CA_HOST::CA_HOST(){
+	h_nSteps=0;
 	h_NR = 0;
 	h_NC = 0;
 	h_NUMCELLS=0;
@@ -314,6 +331,7 @@ bool CA_HOST::loadParameters(){
 	ccPATH path = this->s_parameters.c_str();
 	FILE *file;
 	char str[255];
+	const char nsteps_str[] 	= "nsteps";
 	const char ncols_str[] 		= "ncols";
 	const char nrows_str[] 		= "nrows";
 	const char Pclock_str[] 	= "Pclock";
@@ -332,9 +350,20 @@ bool CA_HOST::loadParameters(){
 
 	if (( file = fopen(path, "r"))==NULL)
 	{
-		fprintf(stderr,"Cannot open file parameters.\nEXITING");
+		fprintf(stderr,"Cannot open file parameters: ");
+		fprintf(stderr,path);
+		fprintf(stderr,"\nEXITING");
 		exit(1);
 	}
+
+	//nsteps
+	fscanf(file,"%s",&str);
+	if (strcmp(str, nsteps_str)){
+		fprintf(stderr,"Error nsteps.\n");
+		return false;
+	}
+	fscanf(file,"%s",&str);
+	h_nSteps = atoi(str);
 
 	//ncols
 	fscanf(file,"%s",&str);
@@ -509,13 +538,13 @@ void CA_HOST::simulationInit(){
 	if (!this->loadEmissionRate(s_emission_rate.c_str())) fatalErrorExit("Emission RATE INITIALIZATION ERROR");
 
 	//delete this
-//	for (auto v : vent){
-//		printf("Vent (%u,%u)\n",v.x(),v.y());
-//	}
-//
-//	for(auto e: emission_rate){
-//		e.print();
-//	}
+	//	for (auto v : vent){
+	//		printf("Vent (%u,%u)\n",v.x(),v.y());
+	//	}
+	//
+	//	for(auto e: emission_rate){
+	//		e.print();
+	//	}
 	//
 }
 
@@ -683,6 +712,7 @@ void CA_HOST::copyParametersFromCA_HOST_to_CA_GPU(CA_GPU* h_CAGPU){
 	if(!h_CAGPU)
 		fatalErrorExit("NULL pointer to CA_GPU host structure");
 
+	h_CAGPU->d_nSteps			= this->h_nSteps;
 	h_CAGPU->d_NR 				= this->h_NR;
 	h_CAGPU->d_NC 				= this->h_NC;
 	h_CAGPU->d_NUMCELLS 		= this->h_NUMCELLS;
@@ -704,6 +734,9 @@ void CA_HOST::copyParametersFromCA_HOST_to_CA_GPU(CA_GPU* h_CAGPU){
 	h_CAGPU->d_Pepsilon 		= this->h_Pepsilon;
 	h_CAGPU->d_Psigma 			= this->h_Psigma;
 	h_CAGPU->d_Pcv 				= this->h_Pcv;
+
+	//managed unified memory adaptove grid
+	h_CAGPU->h_d_adaptive_grid = this->h_d_adaptive_grid;
 
 	//sim time init =0
 	h_CAGPU->d_sim_elapsed_time		= 0.0;
@@ -765,6 +798,12 @@ void CA_HOST::saveSubstatesOnFile (sPATH outputFolderRoot){
 	saveSubstateOnFile(savepath.c_str(),SOLIDIFIED);
 }
 
+inline int CA_HOST::getNSteps() const {
+	return h_nSteps;
+}
 
+inline void CA_HOST::setNSteps(int nSteps) {
+	h_nSteps = nSteps;
+}
 
 #endif /* CA_HOST_CUH_ */

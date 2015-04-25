@@ -18,6 +18,7 @@
 #define MOORE_NEIGHBORS		(9)
 
 enum SubstatesNames {ALTITUDE=0,THICKNESS,TEMPERATURE,SOLIDIFIED,FLOWN,FLOWO,FLOWE,FLOWS, FLOWNO, FLOWSO, FLOWSE,FLOWNE,NUMBEROFSUBSTATES};
+enum AdaptiveGridBoundaries {X_START=0,X_END,Y_START,Y_END};
 
 
 inline __host__ __device__
@@ -41,7 +42,7 @@ typedef pair<int> coord;
 
 /** utility function to compute the grid size */
 inline
-__host__ int divup(int x, int y) { return x / y + (x % y ? 1 : 0); }
+__host__ __device__ int divup(int x, int y) { return x / y + (x % y ? 1 : 0); }
 
 
 void fatalErrorExit(const char* errmsg){
@@ -51,8 +52,9 @@ void fatalErrorExit(const char* errmsg){
 }
 
 
-void computeKernelLaunchParameter(unsigned int threadsBlockX,unsigned int threadsBlockY,
-								  unsigned int cellsX,unsigned int cellsY, dim3 &dimGrid
+__host__ __device__ void computeKernelLaunchParameter
+						(unsigned int threadsBlockX,unsigned int threadsBlockY,
+						 unsigned int cellsX,unsigned int cellsY, dim3 &dimGrid
 								){
 
 dimGrid.x = divup(cellsX,threadsBlockX);

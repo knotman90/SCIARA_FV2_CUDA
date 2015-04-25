@@ -4,6 +4,7 @@
 //####  OTHER INCLUDES  #########
 #include "CA_HOST.cuh"//		#
 #include "utils.cuh"
+#include "timeCounter.h"
 
 //###############################
 
@@ -26,7 +27,9 @@ void hostInitialize(int argc, char *argv[]){
 	cmd.parseArgv(argc,argv);
 	//configure hosts simulation
 	h_CA.setDataFolderPath(cmd._load_path);
-	h_CA.loadParameters();
+	if(!h_CA.loadParameters()){
+		fatalErrorExit("FAILED LOADING CONFIGURATION PARAMETERS");
+	}
 }
 
 
@@ -119,8 +122,9 @@ void globalTransitionFunction(){
 	dimBlock.y=8;
 	computeKernelLaunchParameter(dimBlock.x,dimBlock.y,h_CA.getNr(),h_CA.getNc(),dimGrid);
 
-//printSubstateG<<<dimGrid,dimBlock>>>(d_CA,THICKNESS);
-	for(int i=0;i<10000;i++){
+	//printSubstateG<<<dimGrid,dimBlock>>>(d_CA,THICKNESS);
+#pragma unroll
+	for(int i=0;i<h_CA.getNSteps();i++){
 		emitLavaFromVents<<<1,nVents>>>(d_CA);
 		temperatureInitialization<<<dimGrid,dimBlock>>>(d_CA);
 		computeFlows<<<dimGrid,dimBlock>>>(d_CA);
@@ -133,26 +137,57 @@ void globalTransitionFunction(){
 
 
 
+__global__ void globalTransitionFunctionGPU(uint NR,uint NC, uint nSteps,uint nVents,CA_GPU* d_CA){
+	dim3 dimBlock;
+	dim3 dimGrid;
+	dimBlock.x=8;
+	dimBlock.y=8;
+	computeKernelLaunchParameter(dimBlock.x,dimBlock.y,NR,NC,dimGrid);
+#pragma unroll
+	for(int s=0;s<nSteps;s++){
+		emitLavaFromVents<<<1,nVents>>>(d_CA);
+		temperatureInitialization<<<dimGrid,dimBlock>>>(d_CA);
+		computeFlows<<<dimGrid,dimBlock>>>(d_CA);
+		reduceFlows<<<dimGrid,dimBlock>>>(d_CA);
+		copyMatrices<<<dimGrid,dimBlock>>>(d_CA);
+	}
+}
+
+void gtf_kernel(){
+	globalTransitionFunctionGPU<<<1,1>>>(h_CA.getNr(),h_CA.getNc(),h_CA.getNSteps(), h_CA.getNumVents(),d_CA);
+	cudaDeviceSynchronize();
+}
+
+__global__ void testUnified(CA_GPU* d_CA){
+	printf("%i\n",d_CA->h_d_adaptive_grid[0]);
+}
+
 int main ( int argc, char *argv[] ){
 	cudaDeviceReset();
+
 	hostInitialize(argc,argv);
 	//configure CA HOST
 	h_CA.simulationInit();
 	nVents = h_CA.getNumVents();
 
 	h_CA.loadSubstates();
-//	h_CA.printParameters();
+	//	h_CA.printParameters();
 
 	d_CA=h_CA.deviceCAGPUInitialization();
+
+
 
 
 	/*
 	 * GLOBAL TRANSITION FUNCTION ON GPU
 	 */
+	//globalTransitionFunctionGPU<<<1,1>>>(h_CA.getNr(),h_CA.getNc(),h_CA.getNSteps(), h_CA.getNumVents(),d_CA);
+	//gtf_kernel();
+	auto elapsedTime= tim::measure<>::execution(globalTransitionFunction); //CPU managed
+	//auto elapsedTime= tim::measure<>::execution(gtf_kernel); //GPU managed
+	//globalTransitionFunction();
 
-	globalTransitionFunction();
 
-	cudaDeviceSynchronize();
 
 
 
@@ -163,5 +198,6 @@ int main ( int argc, char *argv[] ){
 	h_CA.deviceMemoryFree(d_CA);
 	//free CA_HOST memory
 	h_CA.hostMemoryFree();
+	//printf("SIMULATION ENDED in %i ms\n",elapsedTime);
 	printf("SIMULATION ENDED\n");
 }

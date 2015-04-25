@@ -48,7 +48,8 @@ private:
 
 	//#############################  CA PARAMETERS (HOST)  ##########################
 	//																				#
-	//									 											#
+	//																				#
+	int h_nSteps;//									 								#
 	int h_NR;	//numbers of rows													#
 	int h_NC;	//numbers of column													#
 	int h_NUMCELLS; //number of cells = h_NR*h_NC									#
@@ -127,7 +128,7 @@ public:
 
 
 	__inline__
-		__host__ void copyMatricesMemCpyDevToDev();
+	__host__ void copyMatricesMemCpyDevToDev();
 	//GETTER AND SETTERS
 	const sPATH& getDataFolder() const {
 		return s_data_folder;
@@ -140,6 +141,8 @@ public:
 	int getNr() const {
 		return h_NR;
 	}
+	int getNSteps() const;
+	void setNSteps(int nSteps);
 };
 
 /**
@@ -231,6 +234,7 @@ void CA_HOST::deviceMemoryFree(CA_GPU* d_CA){		//Device memory free
  * @return void
  */
 CA_HOST::CA_HOST(){
+	h_nSteps=0;
 	h_NR = 0;
 	h_NC = 0;
 	h_NUMCELLS=0;
@@ -314,6 +318,7 @@ bool CA_HOST::loadParameters(){
 	ccPATH path = this->s_parameters.c_str();
 	FILE *file;
 	char str[255];
+	const char nsteps_str[] 	= "nsteps";
 	const char ncols_str[] 		= "ncols";
 	const char nrows_str[] 		= "nrows";
 	const char Pclock_str[] 	= "Pclock";
@@ -335,6 +340,15 @@ bool CA_HOST::loadParameters(){
 		fprintf(stderr,"Cannot open file parameters.\nEXITING");
 		exit(1);
 	}
+
+	//nsteps
+	fscanf(file,"%s",&str);
+	if (strcmp(str, nsteps_str)){
+		fprintf(stderr,"Error nsteps.\n");
+		return false;
+	}
+	fscanf(file,"%s",&str);
+	h_nSteps = atoi(str);
 
 	//ncols
 	fscanf(file,"%s",&str);
@@ -509,13 +523,13 @@ void CA_HOST::simulationInit(){
 	if (!this->loadEmissionRate(s_emission_rate.c_str())) fatalErrorExit("Emission RATE INITIALIZATION ERROR");
 
 	//delete this
-//	for (auto v : vent){
-//		printf("Vent (%u,%u)\n",v.x(),v.y());
-//	}
-//
-//	for(auto e: emission_rate){
-//		e.print();
-//	}
+	//	for (auto v : vent){
+	//		printf("Vent (%u,%u)\n",v.x(),v.y());
+	//	}
+	//
+	//	for(auto e: emission_rate){
+	//		e.print();
+	//	}
 	//
 }
 
@@ -765,6 +779,12 @@ void CA_HOST::saveSubstatesOnFile (sPATH outputFolderRoot){
 	saveSubstateOnFile(savepath.c_str(),SOLIDIFIED);
 }
 
+inline int CA_HOST::getNSteps() const {
+	return h_nSteps;
+}
 
+inline void CA_HOST::setNSteps(int nSteps) {
+	h_nSteps = nSteps;
+}
 
 #endif /* CA_HOST_CUH_ */

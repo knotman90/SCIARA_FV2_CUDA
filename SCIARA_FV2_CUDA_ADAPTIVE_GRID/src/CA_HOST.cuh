@@ -219,8 +219,9 @@ bool CA_HOST::deviceMemoryAllocation(CA_GPU* d_CA){
 	CUDASAFECALL(cudaMalloc(&d_CA->emissionRates,sizeof(double)*emission_rate[0].size()*vent.size()));//coordinate vents(int)
 
 	//allocate space for managed cuda unified memory address for adaptive grid
-	CUDASAFECALL( cudaMallocManaged(&h_d_adaptive_grid,sizeof(uint)*4) );
-	CUDASAFECALL(cudaMemset(h_d_adaptive_grid,0,4));
+	CUDASAFECALL( cudaMallocManaged(&h_d_adaptive_grid,sizeof(uint)*ADAPTIVEGRID_SIZE) );
+	//vent vector already allocated
+	initializeadaptiveGrid(h_d_adaptive_grid,vent);
 	return true;
 }
 

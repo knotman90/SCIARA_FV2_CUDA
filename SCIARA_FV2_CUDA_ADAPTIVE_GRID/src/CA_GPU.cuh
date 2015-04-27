@@ -14,7 +14,7 @@ class CA_GPU{
 	friend class CA_HOST;
 public:
 	//ADAPTIVE GRID
-	 uint* h_d_adaptive_grid; //managed cuda Unified address
+	uint* h_d_adaptive_grid; //managed cuda Unified address
 private:
 
 
@@ -91,7 +91,13 @@ public:
 	__device__ bool isWithinCABounds(int row, int col);
 
 	__inline
-	__device__ bool isWithinCABounds_AG(int row, int col );
+	__device__ bool isWithinCABounds_WholeSpace(int row, int col);
+
+	__inline
+	__device__ bool isWithinCABounds_AG(int row, int col);
+
+	__inline
+	__device__ bool isWithinCABounds_AG_FAT(int row, int col);
 
 
 	__inline__
@@ -123,13 +129,19 @@ public:
 	__device__ void swapMatrices();
 
 
+	__inline__
+	__device__ void adjustAdaptiveGrid(int row, int col);
+
+	__inline__
+	__device__ void copyNewToCurrentAdaptiveGrid();
+
 
 };//end definition of CA_GPU
 
 
 __device__ void CA_GPU::swapMatrices(){
-	int row = blockIdx.y * blockDim.y + threadIdx.y;
-	int col = blockIdx.x * blockDim.x + threadIdx.x;
+	int row = blockIdx.y * blockDim.y + threadIdx.y+h_d_adaptive_grid[ROW_START];
+	int col = blockIdx.x * blockDim.x + threadIdx.x+h_d_adaptive_grid[COL_START];
 
 	if(isWithinCABounds(row,col)){
 		int idx=0;
@@ -163,10 +175,10 @@ __device__ void CA_GPU::swapMatrices(){
 //TODO unroll sums caching the flows values
 __device__ void CA_GPU::distribuiteFlows(){
 	//get cell coordinates
-	int row = blockIdx.y * blockDim.y + threadIdx.y;
-	int col = blockIdx.x * blockDim.x + threadIdx.x;
+	int row = blockIdx.y * blockDim.y + threadIdx.y+h_d_adaptive_grid[ROW_START]-1;
+	int col = blockIdx.x * blockDim.x + threadIdx.x+h_d_adaptive_grid[COL_START]-1;
 
-	if(isWithinCABounds(row,col)){
+	if(isWithinCABounds_AG_FAT(row,col)){
 		//newtick = subtract(sum of outflows) + sum(inflows)
 
 		double sommah=d_sbts_updated[d_getIdx(row,col,THICKNESS)];
@@ -244,6 +256,9 @@ __device__ void CA_GPU::distribuiteFlows(){
 				d_sbts_current[d_getIdx(row,col,ALTITUDE)] = newQuote;
 				d_sbts_current[d_getIdx(row,col,THICKNESS)] = 0;
 				d_sbts_current[d_getIdx(row,col,TEMPERATURE)] = d_PTsol;
+			}else{
+				//there is lava and is not solidified -> activate this cell!
+				adjustAdaptiveGrid(row,col);
 			}
 
 		}else{
@@ -308,9 +323,36 @@ __device__ int CA_GPU::getMooreNeighIdx_Y(int col, int neighIdx){
 __inline
 __device__ bool CA_GPU::isWithinCABounds(int row, int col){
 
+	//return isWithinCABounds_WholeSpace(row,col);
+	return isWithinCABounds_AG(row,col);
+}
+
+
+
+__inline
+__device__ bool CA_GPU::isWithinCABounds_WholeSpace(int row, int col){
+
 	return
 			(row>=0 && row <= (d_NR-1)) &&
 			col>=0 && col <= (d_NC-1);
+}
+
+/**
+ * Chack if a threads is in the boundaries
+ * described by the adaptive grid boundaries
+ * ADDING A BORDER OF 1 cell
+ * h_d_adaptive_grid
+ * @param row
+ * @param col
+ * @param
+ * @return
+ */
+__inline
+__device__ bool CA_GPU::isWithinCABounds_AG_FAT(int row, int col ){
+
+	return
+			(row>=h_d_adaptive_grid[ROW_START]-1 && row <= h_d_adaptive_grid[ROW_END]+1) &&
+			col>=h_d_adaptive_grid[COL_START]-1 && col <= h_d_adaptive_grid[COL_END]+1;
 }
 
 /**
@@ -326,8 +368,8 @@ __inline
 __device__ bool CA_GPU::isWithinCABounds_AG(int row, int col ){
 
 	return
-			(row>=h_d_adaptive_grid[X_START] && row <= h_d_adaptive_grid[X_END]) &&
-			col>=h_d_adaptive_grid[Y_START] && col <= h_d_adaptive_grid[Y_END];
+			(row>=h_d_adaptive_grid[ROW_START] && row <= h_d_adaptive_grid[ROW_END]) &&
+			col>=h_d_adaptive_grid[COL_START] && col <= h_d_adaptive_grid[COL_END];
 }
 
 
@@ -375,8 +417,8 @@ __device__ void CA_GPU::emitLavaFromVent(unsigned int vent){
 __inline__
 __device__ void CA_GPU::cellTemperatureInitialize(){
 	//get cell coordinates
-	int row = blockIdx.y * blockDim.y + threadIdx.y;
-	int col = blockIdx.x * blockDim.x + threadIdx.x;
+	int row = blockIdx.y * blockDim.y + threadIdx.y+h_d_adaptive_grid[ROW_START];
+	int col = blockIdx.x * blockDim.x + threadIdx.x+h_d_adaptive_grid[COL_START];
 
 	if(isWithinCABounds(row,col)){
 		//current cell temperature
@@ -394,8 +436,8 @@ __device__ void CA_GPU::cellTemperatureInitialize(){
 }
 
 __device__ void CA_GPU::empiricalFlows(){
-	int row = blockIdx.y * blockDim.y + threadIdx.y;
-	int col = blockIdx.x * blockDim.x + threadIdx.x;
+	int row = blockIdx.y * blockDim.y + threadIdx.y+h_d_adaptive_grid[ROW_START];
+	int col = blockIdx.x * blockDim.x + threadIdx.x+h_d_adaptive_grid[COL_START];
 	if(isWithinCABounds(row,col)){
 
 		if (d_sbts_updated[d_getIdx(row,col,THICKNESS)] > 0) {
@@ -504,9 +546,42 @@ __device__ void CA_GPU::empiricalFlows(){
 
 
 __inline__
+__device__ void CA_GPU::adjustAdaptiveGrid(int row, int col) {
+	if(col < h_d_adaptive_grid[COL_START])
+		atomicExch(&h_d_adaptive_grid[NEW_COL_START],col);
+	if(col > h_d_adaptive_grid[COL_END])
+		atomicExch(&h_d_adaptive_grid[NEW_COL_END],col);
+
+	if(row < h_d_adaptive_grid[ROW_START])
+		atomicExch(&h_d_adaptive_grid[NEW_ROW_END],row);
+	if(row > h_d_adaptive_grid[ROW_END])
+		atomicExch(&h_d_adaptive_grid[NEW_ROW_END],row);
+
+}
+
+/**
+ * Should always be launched with ADAPTIVEGRID_SIZE/2 threads!
+ */
+__inline__
+__device__ void CA_GPU::copyNewToCurrentAdaptiveGrid() {
+	int ADAPTIVEGRID_SIZE_2=ADAPTIVEGRID_SIZE/2;
+	if(blockIdx.x==0 && blockIdx.y==0){
+		if(threadIdx.x ==0 && threadIdx.y==0){
+			h_d_adaptive_grid[ROW_START] = h_d_adaptive_grid[NEW_ROW_START];
+			h_d_adaptive_grid[COL_START] = h_d_adaptive_grid[NEW_COL_START];
+
+			h_d_adaptive_grid[ROW_END] = h_d_adaptive_grid[NEW_ROW_END];
+			h_d_adaptive_grid[COL_END] = h_d_adaptive_grid[NEW_COL_END];
+		}
+	}
+
+}
+
+
+__inline__
 __device__ void CA_GPU::printSubstate(int substate){
-	int row = blockIdx.y * blockDim.y + threadIdx.y;
-	int col = blockIdx.x * blockDim.x + threadIdx.x;
+	int row = blockIdx.y * blockDim.y + threadIdx.y+h_d_adaptive_grid[ROW_START];
+	int col = blockIdx.x * blockDim.x + threadIdx.x+h_d_adaptive_grid[COL_START];
 
 	if(isWithinCABounds(row,col)){
 		double val = d_sbts_updated[d_getIdx(row,col,substate)];
@@ -539,5 +614,7 @@ __host__ void CA_GPU::printParameters()
 	printf("Pcv			%f\n",  d_Pcv);
 	printf("---------------------------------------------\n");
 }
+
+
 
 #endif /* CA_GPU_CUH_ */

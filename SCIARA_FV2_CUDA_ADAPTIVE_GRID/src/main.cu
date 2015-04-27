@@ -113,6 +113,16 @@ __global__ void copyMatrices(CA_GPU* d_CA){
 	d_CA->swapMatrices();
 }
 
+__global__ void updateMinRect(CA_GPU* d_CA){
+	d_CA->copyNewToCurrentAdaptiveGrid();
+}
+
+void printfAdaptoveGrid(){
+	for(int i=0;i<ADAPTIVEGRID_SIZE;i++){
+		printf("%i ",h_CA.h_d_adaptive_grid[i]);
+	}
+	printf("\n");
+}
 
 //#######################################
 unsigned int nVents;
@@ -120,7 +130,10 @@ void globalTransitionFunction(){
 	////kernel launch parameters settings
 	dimBlock.x=8;
 	dimBlock.y=8;
-	computeKernelLaunchParameter(dimBlock.x,dimBlock.y,h_CA.getNr(),h_CA.getNc(),dimGrid);
+	int COLS,ROWS;
+	COLS=h_CA.h_d_adaptive_grid[COL_END]-h_CA.h_d_adaptive_grid[COL_START]+1;
+	ROWS=h_CA.h_d_adaptive_grid[ROW_END]-h_CA.h_d_adaptive_grid[ROW_START]+1;
+	computeKernelLaunchParameter(dimBlock.x,dimBlock.y,ROWS,COLS,dimGrid);
 
 	//printSubstateG<<<dimGrid,dimBlock>>>(d_CA,THICKNESS);
 #pragma unroll
@@ -128,7 +141,17 @@ void globalTransitionFunction(){
 		emitLavaFromVents<<<1,nVents>>>(d_CA);
 		temperatureInitialization<<<dimGrid,dimBlock>>>(d_CA);
 		computeFlows<<<dimGrid,dimBlock>>>(d_CA);
+		cudaDeviceSynchronize();
+		COLS=h_CA.h_d_adaptive_grid[COL_END]-h_CA.h_d_adaptive_grid[COL_START]+3;
+		ROWS=h_CA.h_d_adaptive_grid[ROW_END]-h_CA.h_d_adaptive_grid[ROW_START]+3;
+		computeKernelLaunchParameter(dimBlock.x,dimBlock.y,ROWS,COLS,dimGrid);
 		reduceFlows<<<dimGrid,dimBlock>>>(d_CA);
+		updateMinRect<<<1,1>>>(d_CA);
+		cudaDeviceSynchronize();
+		COLS=h_CA.h_d_adaptive_grid[COL_END]-h_CA.h_d_adaptive_grid[COL_START]+1;
+		ROWS=h_CA.h_d_adaptive_grid[ROW_END]-h_CA.h_d_adaptive_grid[ROW_START]+1;
+		computeKernelLaunchParameter(dimBlock.x,dimBlock.y,ROWS,COLS,dimGrid);
+		//printfAdaptoveGrid();//delete just for debug
 		//h_CA.copyMatricesMemCpyDevToDev();
 		copyMatrices<<<dimGrid,dimBlock>>>(d_CA);
 	}

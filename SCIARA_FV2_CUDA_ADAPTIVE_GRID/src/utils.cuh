@@ -9,6 +9,9 @@
 #define UTILS_H_
 #include<string.h>
 #include<iostream>
+#include "vent.h"
+#include <limits>
+#include <vector>
 
 //#####MATH DEFINES####
 #define RAD2 (1.41421356237)
@@ -18,7 +21,8 @@
 #define MOORE_NEIGHBORS		(9)
 
 enum SubstatesNames {ALTITUDE=0,THICKNESS,TEMPERATURE,SOLIDIFIED,FLOWN,FLOWO,FLOWE,FLOWS, FLOWNO, FLOWSO, FLOWSE,FLOWNE,NUMBEROFSUBSTATES};
-enum AdaptiveGridBoundaries {X_START=0,X_END,Y_START,Y_END};
+enum AdaptiveGridBoundaries {ROW_START=0,ROW_END,COL_START,COL_END,
+							NEW_ROW_START,NEW_ROW_END,NEW_COL_START,NEW_COL_END,ADAPTIVEGRID_SIZE};
 
 
 inline __host__ __device__
@@ -159,6 +163,30 @@ bool CommandLine::parseArgv(int argc, char* argv[]){
 		}
 	}
 	return true;
+}
+
+
+/**
+ * Adaptivegrid array should be allocated (ADAPTIVEGRID_SIZE size)
+ * Construct the minimum bounding box for that containts the vents
+ * @param adaptiveGrid
+ * @param vent
+ */
+void initializeadaptiveGrid(uint* adaptiveGrid,vector<TVent> vent){
+	adaptiveGrid[NEW_ROW_START]	=adaptiveGrid[ROW_START] = UINT_MAX;
+	adaptiveGrid[NEW_COL_START]	=adaptiveGrid[COL_START] = UINT_MAX;
+
+	adaptiveGrid[NEW_ROW_END]		=adaptiveGrid[ROW_END]   = 0;
+	adaptiveGrid[NEW_COL_END]		=adaptiveGrid[COL_END]   = 0;
+
+	for(auto v : vent){
+		adaptiveGrid[NEW_ROW_START]	=adaptiveGrid[ROW_START] = min(adaptiveGrid[ROW_START],v.y());
+		adaptiveGrid[NEW_ROW_END]	=adaptiveGrid[ROW_END]   = max(adaptiveGrid[ROW_END],v.y());
+
+		adaptiveGrid[NEW_COL_START]	=adaptiveGrid[COL_START] = min(adaptiveGrid[COL_START],v.x());
+		adaptiveGrid[NEW_COL_END]	=adaptiveGrid[COL_END]   = max(adaptiveGrid[COL_END],v.x());
+
+	}
 }
 
 #endif /* UTILS_H_ */

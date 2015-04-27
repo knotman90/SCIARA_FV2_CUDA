@@ -31,6 +31,8 @@ public:
 		for (unsigned int i = 0; i < _emission_rate.size(); i++)
 			printf("%f\n", _emission_rate[i]);
 	}
+
+
 private:
 	int _vent_id;
 	vector<double> _emission_rate;

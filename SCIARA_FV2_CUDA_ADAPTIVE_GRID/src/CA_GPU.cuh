@@ -175,10 +175,10 @@ __device__ void CA_GPU::swapMatrices(){
 //TODO unroll sums caching the flows values
 __device__ void CA_GPU::distribuiteFlows(){
 	//get cell coordinates
-	int row = blockIdx.y * blockDim.y + threadIdx.y+h_d_adaptive_grid[ROW_START]-1;
-	int col = blockIdx.x * blockDim.x + threadIdx.x+h_d_adaptive_grid[COL_START]-1;
-
+	int row = blockIdx.y * blockDim.y + threadIdx.y+h_d_adaptive_grid[ROW_START];
+	int col = blockIdx.x * blockDim.x + threadIdx.x+h_d_adaptive_grid[COL_START];
 	if(isWithinCABounds_AG_FAT(row,col)){
+	printf("%i,%i\n",row,col);
 		//newtick = subtract(sum of outflows) + sum(inflows)
 
 		double sommah=d_sbts_updated[d_getIdx(row,col,THICKNESS)];
@@ -191,6 +191,7 @@ __device__ void CA_GPU::distribuiteFlows(){
 		//same hold for the other pair of indices
 
 		//new_thick= -flowToNeigh + flowReceived
+
 		sommah-=
 				d_sbts_current[d_getIdx(row,col,FLOWN)]+
 				d_sbts_current[d_getIdx(row,col,FLOWS)]+
@@ -547,15 +548,18 @@ __device__ void CA_GPU::empiricalFlows(){
 
 __inline__
 __device__ void CA_GPU::adjustAdaptiveGrid(int row, int col) {
+
 	if(col < h_d_adaptive_grid[COL_START])
 		atomicExch(&h_d_adaptive_grid[NEW_COL_START],col);
-	if(col > h_d_adaptive_grid[COL_END])
-		atomicExch(&h_d_adaptive_grid[NEW_COL_END],col);
+	else
+		if(col > h_d_adaptive_grid[COL_END])
+			atomicExch(&h_d_adaptive_grid[NEW_COL_END],col);
 
 	if(row < h_d_adaptive_grid[ROW_START])
-		atomicExch(&h_d_adaptive_grid[NEW_ROW_END],row);
-	if(row > h_d_adaptive_grid[ROW_END])
-		atomicExch(&h_d_adaptive_grid[NEW_ROW_END],row);
+		atomicExch(&h_d_adaptive_grid[NEW_ROW_START],row);
+	else
+		if(row > h_d_adaptive_grid[ROW_END])
+			atomicExch(&h_d_adaptive_grid[NEW_ROW_END],row);
 
 }
 

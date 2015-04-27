@@ -151,7 +151,7 @@ void globalTransitionFunction(){
 		COLS=h_CA.h_d_adaptive_grid[COL_END]-h_CA.h_d_adaptive_grid[COL_START]+1;
 		ROWS=h_CA.h_d_adaptive_grid[ROW_END]-h_CA.h_d_adaptive_grid[ROW_START]+1;
 		computeKernelLaunchParameter(dimBlock.x,dimBlock.y,ROWS,COLS,dimGrid);
-		//printfAdaptoveGrid();//delete just for debug
+		printfAdaptoveGrid();//delete just for debug
 		//h_CA.copyMatricesMemCpyDevToDev();
 		copyMatrices<<<dimGrid,dimBlock>>>(d_CA);
 	}

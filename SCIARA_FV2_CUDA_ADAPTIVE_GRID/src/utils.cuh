@@ -60,7 +60,7 @@ __host__ __device__ void computeKernelLaunchParameter
 						(unsigned int threadsBlockX,unsigned int threadsBlockY,
 						 unsigned int cellsX,unsigned int cellsY, dim3 &dimGrid
 								){
-
+printf("Launching with %i,%i \n",cellsX,cellsY);
 dimGrid.x = divup(cellsX,threadsBlockX);
 dimGrid.y = divup(cellsY,threadsBlockY);
 

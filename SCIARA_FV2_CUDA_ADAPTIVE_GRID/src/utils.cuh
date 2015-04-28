@@ -22,7 +22,7 @@
 
 enum SubstatesNames {ALTITUDE=0,THICKNESS,TEMPERATURE,SOLIDIFIED,FLOWN,FLOWO,FLOWE,FLOWS, FLOWNO, FLOWSO, FLOWSE,FLOWNE,NUMBEROFSUBSTATES};
 enum AdaptiveGridBoundaries {ROW_START=0,ROW_END,COL_START,COL_END,
-							NEW_ROW_START,NEW_ROW_END,NEW_COL_START,NEW_COL_END,ADAPTIVEGRID_SIZE};
+	NEW_ROW_START,NEW_ROW_END,NEW_COL_START,NEW_COL_END,ADAPTIVEGRID_SIZE};
 
 
 inline __host__ __device__
@@ -57,13 +57,31 @@ void fatalErrorExit(const char* errmsg){
 
 
 __host__ __device__ void computeKernelLaunchParameter
-						(unsigned int threadsBlockX,unsigned int threadsBlockY,
-						 unsigned int cellsX,unsigned int cellsY, dim3 &dimGrid
-								){
-printf("Launching with %i,%i \n",cellsX,cellsY);
-dimGrid.x = divup(cellsX,threadsBlockX);
-dimGrid.y = divup(cellsY,threadsBlockY);
+(unsigned int threadsBlockX,unsigned int threadsBlockY,
+		unsigned int rows,unsigned int cols, dim3 &dimGrid
+){
+	dimGrid.x = divup(cols,threadsBlockY);
+	dimGrid.y = divup(rows,threadsBlockX);
 
+
+}
+
+/**
+ * Compute the number of block on x and y direction necessary to
+ * allocate the number of thread described by the adaptive grid bounding box
+ * For each axis plus is added to the number of threads.
+ * @param dimBlock
+ * @param h_d_adaptive_grid (allocated with at least 4 elements describing the adaptive grid (usually unified memory)
+ * @param plus
+ * @param dimGrid
+ */
+__host__ __device__ void computeKernelLaunchParameter_plus(dim3 dimBlock,uint* h_d_adaptive_grid,uint plus, dim3 &dimGrid){
+	cudaDeviceSynchronize();
+	int COLS=h_d_adaptive_grid[COL_END]-h_d_adaptive_grid[COL_START]+plus;
+	int ROWS=h_d_adaptive_grid[ROW_END]-h_d_adaptive_grid[ROW_START]+plus;
+	dimGrid.x = divup(COLS,dimBlock.x);
+	dimGrid.y = divup(ROWS,dimBlock.x);
+	cudaDeviceSynchronize();
 
 }
 

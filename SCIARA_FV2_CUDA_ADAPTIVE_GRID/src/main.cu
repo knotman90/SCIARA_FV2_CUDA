@@ -127,31 +127,32 @@ void printfAdaptoveGrid(){
 //#######################################
 unsigned int nVents;
 void globalTransitionFunction(){
+	/*To print adaptive grid
+	 * cudaDeviceSynchronize();
+		printf("START ");
+		printfAdaptoveGrid();//delete just for debug
+		cudaDeviceSynchronize();
+	 *
+	 */
 	////kernel launch parameters settings
+	int COLS,ROWS;
 	dimBlock.x=8;
 	dimBlock.y=8;
-	int COLS,ROWS;
-	COLS=h_CA.h_d_adaptive_grid[COL_END]-h_CA.h_d_adaptive_grid[COL_START]+1;
-	ROWS=h_CA.h_d_adaptive_grid[ROW_END]-h_CA.h_d_adaptive_grid[ROW_START]+1;
-	computeKernelLaunchParameter(dimBlock.x,dimBlock.y,ROWS,COLS,dimGrid);
 
-	//printSubstateG<<<dimGrid,dimBlock>>>(d_CA,THICKNESS);
+	computeKernelLaunchParameter_plus(dimBlock,h_CA.h_d_adaptive_grid,1,dimGrid);
+
 #pragma unroll
 	for(int i=0;i<h_CA.getNSteps();i++){
+		//lava emission from vents
 		emitLavaFromVents<<<1,nVents>>>(d_CA);
+		//transformation of the temperature in temp*thickness
 		temperatureInitialization<<<dimGrid,dimBlock>>>(d_CA);
+		//outflows computations. Each cells compute flow out to
 		computeFlows<<<dimGrid,dimBlock>>>(d_CA);
-		cudaDeviceSynchronize();
-		COLS=h_CA.h_d_adaptive_grid[COL_END]-h_CA.h_d_adaptive_grid[COL_START]+3;
-		ROWS=h_CA.h_d_adaptive_grid[ROW_END]-h_CA.h_d_adaptive_grid[ROW_START]+3;
-		computeKernelLaunchParameter(dimBlock.x,dimBlock.y,ROWS,COLS,dimGrid);
+		computeKernelLaunchParameter_plus(dimBlock,h_CA.h_d_adaptive_grid,3,dimGrid);//fat adaptivegrid to handle expansion
 		reduceFlows<<<dimGrid,dimBlock>>>(d_CA);
-		updateMinRect<<<1,1>>>(d_CA);
-		cudaDeviceSynchronize();
-		COLS=h_CA.h_d_adaptive_grid[COL_END]-h_CA.h_d_adaptive_grid[COL_START]+1;
-		ROWS=h_CA.h_d_adaptive_grid[ROW_END]-h_CA.h_d_adaptive_grid[ROW_START]+1;
-		computeKernelLaunchParameter(dimBlock.x,dimBlock.y,ROWS,COLS,dimGrid);
-		printfAdaptoveGrid();//delete just for debug
+		updateMinRect<<<1,4>>>(d_CA);
+		computeKernelLaunchParameter_plus(dimBlock,h_CA.h_d_adaptive_grid,1,dimGrid);
 		//h_CA.copyMatricesMemCpyDevToDev();
 		copyMatrices<<<dimGrid,dimBlock>>>(d_CA);
 	}

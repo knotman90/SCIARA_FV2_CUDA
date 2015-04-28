@@ -175,10 +175,9 @@ __device__ void CA_GPU::swapMatrices(){
 //TODO unroll sums caching the flows values
 __device__ void CA_GPU::distribuiteFlows(){
 	//get cell coordinates
-	int row = blockIdx.y * blockDim.y + threadIdx.y+h_d_adaptive_grid[ROW_START];
-	int col = blockIdx.x * blockDim.x + threadIdx.x+h_d_adaptive_grid[COL_START];
+	int row = blockIdx.y * blockDim.y + threadIdx.y+h_d_adaptive_grid[ROW_START]-1;
+	int col = blockIdx.x * blockDim.x + threadIdx.x+h_d_adaptive_grid[COL_START]-1;
 	if(isWithinCABounds_AG_FAT(row,col)){
-	printf("%i,%i\n",row,col);
 		//newtick = subtract(sum of outflows) + sum(inflows)
 
 		double sommah=d_sbts_updated[d_getIdx(row,col,THICKNESS)];
@@ -191,7 +190,7 @@ __device__ void CA_GPU::distribuiteFlows(){
 		//same hold for the other pair of indices
 
 		//new_thick= -flowToNeigh + flowReceived
-
+if(isWithinCABounds(row,col)){
 		sommah-=
 				d_sbts_current[d_getIdx(row,col,FLOWN)]+
 				d_sbts_current[d_getIdx(row,col,FLOWS)]+
@@ -201,7 +200,7 @@ __device__ void CA_GPU::distribuiteFlows(){
 				d_sbts_current[d_getIdx(row,col,FLOWNE)]+
 				d_sbts_current[d_getIdx(row,col,FLOWSO)]+
 				d_sbts_current[d_getIdx(row,col,FLOWSE)];
-
+}
 
 		sommath= sommah * new_temp;
 		sommah+=
@@ -548,18 +547,11 @@ __device__ void CA_GPU::empiricalFlows(){
 
 __inline__
 __device__ void CA_GPU::adjustAdaptiveGrid(int row, int col) {
+	atomicMax(&h_d_adaptive_grid[NEW_COL_END],col);
+	atomicMin(&h_d_adaptive_grid[NEW_COL_START],col);
 
-	if(col < h_d_adaptive_grid[COL_START])
-		atomicExch(&h_d_adaptive_grid[NEW_COL_START],col);
-	else
-		if(col > h_d_adaptive_grid[COL_END])
-			atomicExch(&h_d_adaptive_grid[NEW_COL_END],col);
-
-	if(row < h_d_adaptive_grid[ROW_START])
-		atomicExch(&h_d_adaptive_grid[NEW_ROW_START],row);
-	else
-		if(row > h_d_adaptive_grid[ROW_END])
-			atomicExch(&h_d_adaptive_grid[NEW_ROW_END],row);
+	atomicMax(&h_d_adaptive_grid[NEW_ROW_END],row);
+	atomicMin(&h_d_adaptive_grid[NEW_ROW_START],row);
 
 }
 
@@ -570,12 +562,8 @@ __inline__
 __device__ void CA_GPU::copyNewToCurrentAdaptiveGrid() {
 	int ADAPTIVEGRID_SIZE_2=ADAPTIVEGRID_SIZE/2;
 	if(blockIdx.x==0 && blockIdx.y==0){
-		if(threadIdx.x ==0 && threadIdx.y==0){
-			h_d_adaptive_grid[ROW_START] = h_d_adaptive_grid[NEW_ROW_START];
-			h_d_adaptive_grid[COL_START] = h_d_adaptive_grid[NEW_COL_START];
-
-			h_d_adaptive_grid[ROW_END] = h_d_adaptive_grid[NEW_ROW_END];
-			h_d_adaptive_grid[COL_END] = h_d_adaptive_grid[NEW_COL_END];
+		if(threadIdx.x <=ADAPTIVEGRID_SIZE_2 && threadIdx.y==0){
+			h_d_adaptive_grid[threadIdx.x] = h_d_adaptive_grid[threadIdx.x+ADAPTIVEGRID_SIZE_2];
 		}
 	}
 

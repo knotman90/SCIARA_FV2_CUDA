@@ -561,7 +561,7 @@ bool CA_HOST::loadEmissionRate(sPATH path){
 	int emission_rate_file_status = loadEmissionRates(input_file, emission_time, emission_rate, vent);
 	fclose(input_file);
 
-	//verifica della consistenza del file e definisce il vettore vent
+	//verifica della consistenza del file chee definisce il vettore vent
 	int error = defineVents(emission_rate, vent);
 	if (error || emission_rate_file_status != EMISSION_RATE_FILE_OK){
 		std::string err= "Error verifyng the consistency of the emission rate and vents: ";
@@ -754,7 +754,7 @@ void CA_HOST::copyParametersFromCA_HOST_to_CA_GPU(CA_GPU* h_CAGPU){
  */
 void CA_HOST::copyBackFromGPU(CA_GPU* d_CA){
 	//copy only sibstates quote, thickness and temperature
-	printf("Copying back %i substates\n",FLOWN);
+	//printf("Copying back %i substates\n",FLOWN);
 	CUDASAFECALL(cudaMemcpy(h_sbts,host_handle.d_sbts_updated,FLOWN*h_NUMCELLS*sizeof(double),cudaMemcpyDeviceToHost));
 
 }

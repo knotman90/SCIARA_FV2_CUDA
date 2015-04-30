@@ -135,9 +135,8 @@ void globalTransitionFunction(){
 	 *
 	 */
 	////kernel launch parameters settings
-	int COLS,ROWS;
-	dimBlock.x=8;
-	dimBlock.y=8;
+	dimBlock.x=16;
+	dimBlock.y=16;
 
 	computeKernelLaunchParameter_plus(dimBlock,h_CA.h_d_adaptive_grid,1,dimGrid);
 
@@ -164,8 +163,8 @@ void globalTransitionFunction(){
 __global__ void globalTransitionFunctionGPU(uint NR,uint NC, uint nSteps,uint nVents,CA_GPU* d_CA){
 	dim3 dimBlock;
 	dim3 dimGrid;
-	dimBlock.x=8;
-	dimBlock.y=8;
+	dimBlock.x=4;
+	dimBlock.y=4;
 	computeKernelLaunchParameter(dimBlock.x,dimBlock.y,NR,NC,dimGrid);
 #pragma unroll
 	for(int s=0;s<nSteps;s++){
@@ -173,6 +172,7 @@ __global__ void globalTransitionFunctionGPU(uint NR,uint NC, uint nSteps,uint nV
 		temperatureInitialization<<<dimGrid,dimBlock>>>(d_CA);
 		computeFlows<<<dimGrid,dimBlock>>>(d_CA);
 		reduceFlows<<<dimGrid,dimBlock>>>(d_CA);
+		updateMinRect<<<1,4>>>(d_CA);
 		copyMatrices<<<dimGrid,dimBlock>>>(d_CA);
 	}
 }
@@ -199,9 +199,6 @@ int main ( int argc, char *argv[] ){
 
 	d_CA=h_CA.deviceCAGPUInitialization();
 
-
-
-
 	/*
 	 * GLOBAL TRANSITION FUNCTION ON GPU
 	 */
@@ -212,9 +209,6 @@ int main ( int argc, char *argv[] ){
 	//globalTransitionFunction();
 
 
-
-
-
 	h_CA.copyBackFromGPU(d_CA);
 	h_CA.saveSubstatesOnFile(h_CA.getDataFolder()+"/output/");
 
@@ -222,6 +216,6 @@ int main ( int argc, char *argv[] ){
 	h_CA.deviceMemoryFree(d_CA);
 	//free CA_HOST memory
 	h_CA.hostMemoryFree();
-	//printf("SIMULATION ENDED in %i ms\n",elapsedTime);
-	printf("SIMULATION ENDED\n");
+	printf("SIMULATION ENDED (%i) in %i ms\n",h_CA.getNSteps(),elapsedTime);
+	//printf("SIMULATION ENDED\n");
 }

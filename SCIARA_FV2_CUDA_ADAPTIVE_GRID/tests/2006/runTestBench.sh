@@ -43,6 +43,6 @@ do
 	sed -i '1s/.*/nsteps '$i'/' $CUDA_CONF
 	$CUDA_EXE -c $CUDA_HOME/data/2006/  #>> $RESULT_FILE_CUDA
 
-	./compareMatrices_steps.sh $i Y Y Y Y > output/comparison/result_comparision_"$i".txt
+	./compareMatrices_steps_2006.sh $i Y Y Y Y > output/comparison/result_comparision_"$i".txt
 	
 done

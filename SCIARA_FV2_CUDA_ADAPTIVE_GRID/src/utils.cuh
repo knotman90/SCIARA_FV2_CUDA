@@ -64,6 +64,7 @@ __host__ __device__ void computeKernelLaunchParameter
 	dimGrid.y = divup(rows,threadsBlockX);
 
 
+
 }
 
 /**
@@ -81,6 +82,7 @@ __host__ __device__ void computeKernelLaunchParameter_plus(dim3 dimBlock,uint* h
 	int ROWS=h_d_adaptive_grid[ROW_END]-h_d_adaptive_grid[ROW_START]+plus;
 	dimGrid.x = divup(COLS,dimBlock.x);
 	dimGrid.y = divup(ROWS,dimBlock.x);
+	//printf("Launch paramrters: BLOCK %i,%i GRID %i,%i\n",dimBlock.x,dimBlock.y,dimGrid.x,dimGrid.y);
 	cudaDeviceSynchronize();
 
 }

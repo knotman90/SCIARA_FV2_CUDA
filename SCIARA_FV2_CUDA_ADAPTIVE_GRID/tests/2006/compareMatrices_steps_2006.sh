@@ -27,16 +27,16 @@ fi
 
 
 echo "		THICKNESS"
-perl compareMatrix.pl  /home/knotman/git/SCIARA_FV2_CUDA/SCIARA_FV2_CUDA_ADAPTIVE_GRID/data/2006/output/THICKNESS.out.sst \
+perl ../compareMatrix.pl  /home/knotman/git/SCIARA_FV2_CUDA/SCIARA_FV2_CUDA_ADAPTIVE_GRID/data/2006/output/THICKNESS.out.sst \
 						"./output/ORIGINAL_000000"$STEPS"_Thickness.stt" $2
 
 echo "		TEMPERATURE"
-perl compareMatrix.pl /home/knotman/git/SCIARA_FV2_CUDA/SCIARA_FV2_CUDA_ADAPTIVE_GRID/data/2006/output/TEMPERATURE.out.sst \
+perl ../compareMatrix.pl /home/knotman/git/SCIARA_FV2_CUDA/SCIARA_FV2_CUDA_ADAPTIVE_GRID/data/2006/output/TEMPERATURE.out.sst \
 						"./output/ORIGINAL_000000"$STEPS"_Temperature.stt" $3
 
 echo "		QUOTE"
-perl compareMatrix.pl /home/knotman/git/SCIARA_FV2_CUDA/SCIARA_FV2_CUDA_ADAPTIVE_GRID/data/2006/output/QUOTE.out.sst \
+perl ../compareMatrix.pl /home/knotman/git/SCIARA_FV2_CUDA/SCIARA_FV2_CUDA_ADAPTIVE_GRID/data/2006/output/QUOTE.out.sst \
 						"./output/ORIGINAL_000000"$STEPS"_Morphology.stt" $4
 echo "		SOLIDIFIED"
-perl compareMatrix.pl /home/knotman/git/SCIARA_FV2_CUDA/SCIARA_FV2_CUDA_ADAPTIVE_GRID/data/2006/output/SOLIFIED_LAVA.out.sst \
+perl ../compareMatrix.pl /home/knotman/git/SCIARA_FV2_CUDA/SCIARA_FV2_CUDA_ADAPTIVE_GRID/data/2006/output/SOLIFIED_LAVA.out.sst \
 						"./output/ORIGINAL_000000"$STEPS"_SolidifiedLavaThickness.stt" $5

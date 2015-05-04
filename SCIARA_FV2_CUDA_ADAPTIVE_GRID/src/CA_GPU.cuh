@@ -10,6 +10,9 @@
 #include <math.h>
 #define DEB (0)
 
+#define BDIM_X (8)
+#define BDIM_Y (8)
+
 class CA_GPU{
 	friend class CA_HOST;
 public:
@@ -77,10 +80,10 @@ public:
 
 	//### KERNELS AND GPU CODE FOR THE TRANSITION FUNCTION #####
 	__inline__
-	__device__ int getMooreNeighIdx_X(int row, int neighIdx);
+	__device__ int getMooreNeighIdx_ROW(int row, int neighIdx);
 
 	__inline__
-	__device__ int getMooreNeighIdx_Y(int col, int neighIdx);
+	__device__ int getMooreNeighIdx_COL(int col, int neighIdx);
 
 	__inline__
 	__device__ int d_getIdx(int x, int y, int substate)	{
@@ -117,9 +120,11 @@ public:
 
 	__device__ void empiricalFlows();
 
-	__device__ double __inline__ PowerLaw(double k1, double k2, double T){
+	__inline__
+	__device__ double PowerLaw(double k1, double k2, double T){
 		return exp10(k1 + k2*T);
 	}
+
 	__device__ void distribuiteFlows();
 
 	__inline__
@@ -177,6 +182,7 @@ __device__ void CA_GPU::distribuiteFlows(){
 	//get cell coordinates
 	int row = blockIdx.y * blockDim.y + threadIdx.y+h_d_adaptive_grid[ROW_START]-1;
 	int col = blockIdx.x * blockDim.x + threadIdx.x+h_d_adaptive_grid[COL_START]-1;
+
 	if(isWithinCABounds_AG_FAT(row,col)){
 		//newtick = subtract(sum of outflows) + sum(inflows)
 
@@ -190,66 +196,66 @@ __device__ void CA_GPU::distribuiteFlows(){
 		//same hold for the other pair of indices
 
 		//new_thick= -flowToNeigh + flowReceived
-if(isWithinCABounds(row,col)){
-		sommah-=
-				d_sbts_current[d_getIdx(row,col,FLOWN)]+
-				d_sbts_current[d_getIdx(row,col,FLOWS)]+
-				d_sbts_current[d_getIdx(row,col,FLOWE)]+
-				d_sbts_current[d_getIdx(row,col,FLOWO)]+
-				d_sbts_current[d_getIdx(row,col,FLOWNO)]+
-				d_sbts_current[d_getIdx(row,col,FLOWNE)]+
-				d_sbts_current[d_getIdx(row,col,FLOWSO)]+
-				d_sbts_current[d_getIdx(row,col,FLOWSE)];
-}
+		if(isWithinCABounds(row,col)){
+			sommah-=
+					d_sbts_current[d_getIdx(row,col,FLOWN)]+
+					d_sbts_current[d_getIdx(row,col,FLOWS)]+
+					d_sbts_current[d_getIdx(row,col,FLOWE)]+
+					d_sbts_current[d_getIdx(row,col,FLOWO)]+
+					d_sbts_current[d_getIdx(row,col,FLOWNO)]+
+					d_sbts_current[d_getIdx(row,col,FLOWNE)]+
+					d_sbts_current[d_getIdx(row,col,FLOWSO)]+
+					d_sbts_current[d_getIdx(row,col,FLOWSE)];
+		}
 
 		sommath= sommah * new_temp;
 		sommah+=
-				d_sbts_current[d_getIdx(getMooreNeighIdx_X(row,1),getMooreNeighIdx_Y(col,1),FLOWS)]+
-				d_sbts_current[d_getIdx(getMooreNeighIdx_X(row,4),getMooreNeighIdx_Y(col,4),FLOWN)]+
-				d_sbts_current[d_getIdx(getMooreNeighIdx_X(row,2),getMooreNeighIdx_Y(col,2),FLOWE)]+
-				d_sbts_current[d_getIdx(getMooreNeighIdx_X(row,3),getMooreNeighIdx_Y(col,3),FLOWO)]+
-				d_sbts_current[d_getIdx(getMooreNeighIdx_X(row,6),getMooreNeighIdx_Y(col,6),FLOWNE)]+
-				d_sbts_current[d_getIdx(getMooreNeighIdx_X(row,5),getMooreNeighIdx_Y(col,5),FLOWSE)]+
-				d_sbts_current[d_getIdx(getMooreNeighIdx_X(row,7),getMooreNeighIdx_Y(col,7),FLOWNO)]+
-				d_sbts_current[d_getIdx(getMooreNeighIdx_X(row,8),getMooreNeighIdx_Y(col,8),FLOWSO)];
+				d_sbts_current[d_getIdx(getMooreNeighIdx_ROW(row,1),getMooreNeighIdx_COL(col,1),FLOWS)]+
+				d_sbts_current[d_getIdx(getMooreNeighIdx_ROW(row,4),getMooreNeighIdx_COL(col,4),FLOWN)]+
+				d_sbts_current[d_getIdx(getMooreNeighIdx_ROW(row,2),getMooreNeighIdx_COL(col,2),FLOWE)]+
+				d_sbts_current[d_getIdx(getMooreNeighIdx_ROW(row,3),getMooreNeighIdx_COL(col,3),FLOWO)]+
+				d_sbts_current[d_getIdx(getMooreNeighIdx_ROW(row,6),getMooreNeighIdx_COL(col,6),FLOWNE)]+
+				d_sbts_current[d_getIdx(getMooreNeighIdx_ROW(row,5),getMooreNeighIdx_COL(col,5),FLOWSE)]+
+				d_sbts_current[d_getIdx(getMooreNeighIdx_ROW(row,7),getMooreNeighIdx_COL(col,7),FLOWNO)]+
+				d_sbts_current[d_getIdx(getMooreNeighIdx_ROW(row,8),getMooreNeighIdx_COL(col,8),FLOWSO)];
 
 		sommath+=
-				(d_sbts_updated[d_getIdx(getMooreNeighIdx_X(row,1),getMooreNeighIdx_Y(col,1),TEMPERATURE)]*
-						d_sbts_current[d_getIdx(getMooreNeighIdx_X(row,1),getMooreNeighIdx_Y(col,1),FLOWS)]
+				(d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,1),getMooreNeighIdx_COL(col,1),TEMPERATURE)]*
+						d_sbts_current[d_getIdx(getMooreNeighIdx_ROW(row,1),getMooreNeighIdx_COL(col,1),FLOWS)]
 				)+
-				(d_sbts_updated[d_getIdx(getMooreNeighIdx_X(row,4),getMooreNeighIdx_Y(col,4),TEMPERATURE)]*
-						d_sbts_current[d_getIdx(getMooreNeighIdx_X(row,4),getMooreNeighIdx_Y(col,4),FLOWN)]
+				(d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,4),getMooreNeighIdx_COL(col,4),TEMPERATURE)]*
+						d_sbts_current[d_getIdx(getMooreNeighIdx_ROW(row,4),getMooreNeighIdx_COL(col,4),FLOWN)]
 				)+
-				(d_sbts_updated[d_getIdx(getMooreNeighIdx_X(row,2),getMooreNeighIdx_Y(col,2),TEMPERATURE)]*
-						d_sbts_current[d_getIdx(getMooreNeighIdx_X(row,2),getMooreNeighIdx_Y(col,2),FLOWE)]
+				(d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,2),getMooreNeighIdx_COL(col,2),TEMPERATURE)]*
+						d_sbts_current[d_getIdx(getMooreNeighIdx_ROW(row,2),getMooreNeighIdx_COL(col,2),FLOWE)]
 				)+
-				(d_sbts_updated[d_getIdx(getMooreNeighIdx_X(row,3),getMooreNeighIdx_Y(col,3),TEMPERATURE)]*
-						d_sbts_current[d_getIdx(getMooreNeighIdx_X(row,3),getMooreNeighIdx_Y(col,3),FLOWO)]
+				(d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,3),getMooreNeighIdx_COL(col,3),TEMPERATURE)]*
+						d_sbts_current[d_getIdx(getMooreNeighIdx_ROW(row,3),getMooreNeighIdx_COL(col,3),FLOWO)]
 				)+
-				(d_sbts_updated[d_getIdx(getMooreNeighIdx_X(row,6),getMooreNeighIdx_Y(col,6),TEMPERATURE)]*
-						d_sbts_current[d_getIdx(getMooreNeighIdx_X(row,6),getMooreNeighIdx_Y(col,6),FLOWNE)]
+				(d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,6),getMooreNeighIdx_COL(col,6),TEMPERATURE)]*
+						d_sbts_current[d_getIdx(getMooreNeighIdx_ROW(row,6),getMooreNeighIdx_COL(col,6),FLOWNE)]
 				)+
-				(d_sbts_updated[d_getIdx(getMooreNeighIdx_X(row,5),getMooreNeighIdx_Y(col,5),TEMPERATURE)]*
-						d_sbts_current[d_getIdx(getMooreNeighIdx_X(row,5),getMooreNeighIdx_Y(col,5),FLOWSE)]
+				(d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,5),getMooreNeighIdx_COL(col,5),TEMPERATURE)]*
+						d_sbts_current[d_getIdx(getMooreNeighIdx_ROW(row,5),getMooreNeighIdx_COL(col,5),FLOWSE)]
 				)+
-				(d_sbts_updated[d_getIdx(getMooreNeighIdx_X(row,7),getMooreNeighIdx_Y(col,7),TEMPERATURE)]*
-						d_sbts_current[d_getIdx(getMooreNeighIdx_X(row,7),getMooreNeighIdx_Y(col,7),FLOWNO)]
+				(d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,7),getMooreNeighIdx_COL(col,7),TEMPERATURE)]*
+						d_sbts_current[d_getIdx(getMooreNeighIdx_ROW(row,7),getMooreNeighIdx_COL(col,7),FLOWNO)]
 				)+
-				(d_sbts_updated[d_getIdx(getMooreNeighIdx_X(row,8),getMooreNeighIdx_Y(col,8),TEMPERATURE)]*
-						d_sbts_current[d_getIdx(getMooreNeighIdx_X(row,8),getMooreNeighIdx_Y(col,8),FLOWSO)]);
+				(d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,8),getMooreNeighIdx_COL(col,8),TEMPERATURE)]*
+						d_sbts_current[d_getIdx(getMooreNeighIdx_ROW(row,8),getMooreNeighIdx_COL(col,8),FLOWSO)]);
 
 
 		if(sommah > EPISILON){
 			//update thickness and temperature
 			double new_temp = d_computeNewTemperature(sommah,sommath);
-			if(DEB) printf("New thick/temp (%i,%i), %.5f,%.5f\n",row,col,sommah,sommath);
+			//if(DEB) printf("New thick/temp (%i,%i), %.5f,%.5f\n",row,col,sommah,sommath);
 			d_sbts_current[d_getIdx(row,col,TEMPERATURE)]= new_temp;
 			d_sbts_current[d_getIdx(row,col,THICKNESS)]	 = sommah;
 
 			//printf("I am the thread (%d,%d,%d),%.9f\n",row,col,d_getIdx(row,col,TEMPERATURE),sommah);
 			//quote increment due to solidification
 			if(new_temp<=d_PTsol){
-				if (DEB) printf("Solidified %i,%i %.5f\n",row,col,d_sbts_current[d_getIdx(row,col,THICKNESS)]);
+				//if(DEB) printf("Solidified %i,%i %.5f\n",row,col,d_sbts_current[d_getIdx(row,col,THICKNESS)]);
 				double newQuote = d_sbts_updated[d_getIdx(row,col,ALTITUDE)]+d_sbts_current[d_getIdx(row,col,THICKNESS)];
 				double newSolid = d_sbts_updated[d_getIdx(row,col,SOLIDIFIED)]+d_sbts_current[d_getIdx(row,col,THICKNESS)];
 				d_sbts_current[d_getIdx(row,col,SOLIDIFIED)] = newSolid;
@@ -286,7 +292,7 @@ __device__ double CA_GPU::d_computeNewTemperature(double sommah, double sommath)
          6 | 4 | 7
  */
 __inline__
-__device__ int CA_GPU::getMooreNeighIdx_X(int row, int neighIdx){
+__device__ int CA_GPU::getMooreNeighIdx_ROW(int row, int neighIdx){
 	if(neighIdx==0 || neighIdx==2 || neighIdx == 3)
 		return row;
 
@@ -307,7 +313,7 @@ __device__ int CA_GPU::getMooreNeighIdx_X(int row, int neighIdx){
          6 | 4 | 7
  */
 __inline__
-__device__ int CA_GPU::getMooreNeighIdx_Y(int col, int neighIdx){
+__device__ int CA_GPU::getMooreNeighIdx_COL(int col, int neighIdx){
 	if(neighIdx==0 || neighIdx==1 || neighIdx == 4)
 		return col;
 
@@ -404,7 +410,7 @@ __device__ void CA_GPU::emitLavaFromVent(unsigned int vent){
 		d_sbts_updated[cellIdx] = d_PTvent;
 		d_sbts_current[cellIdx] = d_PTvent;
 
-		if(DEB) printf("emitting lava (%d,%d), %f\n",x,y,emitted_lava);
+		//if(DEB) printf("emitting lava (%d,%d), %f\n",x,y,emitted_lava);
 	}
 
 	if(threadIdx.x==0 && threadIdx.y==0){
@@ -438,9 +444,99 @@ __device__ void CA_GPU::cellTemperatureInitialize(){
 __device__ void CA_GPU::empiricalFlows(){
 	int row = blockIdx.y * blockDim.y + threadIdx.y+h_d_adaptive_grid[ROW_START];
 	int col = blockIdx.x * blockDim.x + threadIdx.x+h_d_adaptive_grid[COL_START];
+	/*
+	 * Shared memory has size dimBlock.x+2 * dimBlock.y+2.
+	 * The indices of the locations that belongs to threads of this block are from the first upper
+	 * left c (1,1) to (dimBlock.x,dimBlock.y). This means that each cells can safely and easily fill
+	 * its indices (just translated by one row and column) and border have to be managed separately.
+									    SHARED MEMORY LOGIC
+											+--------+
+											|uffffffy|
+											|kcccccch|
+											|kcccccch|
+											|kcccccch|
+											|kcccccch|
+											|kcccccch|
+											|kcccccch|
+											|tllllllr|
+											+--------+
+					X are ghost cells (values of threads of neighbors blocks)
+					c are cells inside the block
+	 */
+	/**The row index of the current thread in the shared memory matrix*/
+	int row_s=threadIdx.y+1;
+	/**The column index of the current thread in the shared memory matrix*/
+	int col_s=threadIdx.x+1;
+	//### SHARED INITIALIZATION ###
+	__shared__ double s_altitude [BDIM_Y+2][BDIM_X+2];
+	__shared__ double s_thickness[BDIM_Y+2][BDIM_X+2];
+
+	//-------------------FIRST ghost row (f in the picture)
+	if(threadIdx.y==0){
+		s_altitude	[0][col_s]	= d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,NORTH),getMooreNeighIdx_COL(col,NORTH),ALTITUDE)] ;
+		s_thickness	[0][col_s]	= d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,NORTH),getMooreNeighIdx_COL(col,NORTH),THICKNESS)] ;
+
+		//upperleft corner also initialized by the thread (0,0) (u in picture)
+		if(threadIdx.x==0){
+			s_altitude	[0][0]	= d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,NORTH_WEST),getMooreNeighIdx_COL(col,NORTH_WEST),ALTITUDE)];
+			s_thickness	[0][0]	= d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,NORTH_WEST),getMooreNeighIdx_COL(col,NORTH_WEST),THICKNESS)];
+		}
+
+		//uppertigh corner
+		if(threadIdx.x==blockDim.x-1){//upper right corner (y in picture)
+			s_altitude	[0][blockDim.x+1]	= d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,NORTH_EAST),getMooreNeighIdx_COL(col,NORTH_EAST),ALTITUDE)];
+			s_thickness	[0][blockDim.x+1]	= d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,NORTH_EAST),getMooreNeighIdx_COL(col,NORTH_EAST),THICKNESS)];
+		}
+	}
+
+	//-------------------LAST ghost row (l in the picture)
+	if(threadIdx.y==blockDim.y-1){
+		s_altitude	[blockDim.y+1][col_s]	= d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,SOUTH),getMooreNeighIdx_COL(col,SOUTH),ALTITUDE)] ;
+		s_thickness	[blockDim.y+1][col_s]	= d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,SOUTH),getMooreNeighIdx_COL(col,SOUTH),THICKNESS)] ;
+
+		if(threadIdx.x==0){//bottom left corner (t in picture)
+			s_altitude	[blockDim.y+1][0]	= d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,SOUTH_WEST),getMooreNeighIdx_COL(col,SOUTH_WEST),ALTITUDE)] ;
+			s_thickness	[blockDim.y+1][0]	= d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,SOUTH_WEST),getMooreNeighIdx_COL(col,SOUTH_WEST),THICKNESS)] ;
+		}
+		if(threadIdx.x==blockDim.x-1){//bottom right corner (r in picture)
+			s_altitude	[blockDim.y+1][blockDim.x+1]	= d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,SOUTH_EAST),getMooreNeighIdx_COL(col,SOUTH_EAST),ALTITUDE)] ;
+			s_thickness	[blockDim.y+1][blockDim.x+1]	= d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,SOUTH_EAST),getMooreNeighIdx_COL(col,SOUTH_EAST),THICKNESS)] ;
+		}
+	}
+
+	//-------------------LEFT ghost COLUMN  (k in the picture)
+	if(threadIdx.x==0){
+		s_altitude	[row_s][0]	= d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,WEST),getMooreNeighIdx_COL(col,WEST),ALTITUDE)] ;
+		s_thickness	[row_s][0]	= d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,WEST),getMooreNeighIdx_COL(col,WEST),THICKNESS)] ;
+	}
+	//-------------------LEFT ghost COLUMN  (h in the picture)
+	if(threadIdx.x==blockDim.x-1){
+		s_altitude	[row_s][blockDim.x+1]	= d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,EAST),getMooreNeighIdx_COL(col,EAST),ALTITUDE)] ;
+		s_thickness	[row_s][blockDim.x+1]	= d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,EAST),getMooreNeighIdx_COL(col,EAST),THICKNESS)] ;
+	}
+
+
+
+	//cells inside the block done by all threads of the block! (c in picture)
+	s_altitude	[row_s][col_s]	= d_sbts_updated[d_getIdx(row,col,ALTITUDE)];
+	s_thickness	[row_s][col_s]	= d_sbts_updated[d_getIdx(row,col,THICKNESS)];
+
+	//### SHARED SYNCH ###
+
+	__syncthreads(); //shared fence -> data has to be correctly initialized by all threads
+
+
+
 	if(isWithinCABounds(row,col)){
 
-		if (d_sbts_updated[d_getIdx(row,col,THICKNESS)] > 0) {
+
+//		for(int i=-1;i<=1;i++){
+//			for(int j=-1;j<=1;j++){
+//				printf("(%i,%i,%i,%i)rows %i,cols %i %f \n",row,col,i,j,row_s,col_s,s_altitude[row_s+i][col_s+j]);
+//			}
+//		}
+
+		if (s_thickness[row_s][col_s] > 0) {
 
 			bool n_eliminated[MOORE_NEIGHBORS];
 			double z[MOORE_NEIGHBORS];
@@ -457,41 +553,40 @@ __device__ void CA_GPU::empiricalFlows(){
 			_Pr = PowerLaw(d_a, d_b, d_sbts_updated[d_getIdx(row,col,TEMPERATURE)]);
 			hc 	= PowerLaw(d_c, d_d, d_sbts_updated[d_getIdx(row,col,TEMPERATURE)]);
 
+
 #pragma unroll
 			for ( i = 0; i < MOORE_NEIGHBORS; i++) {
 
-				h[i] = d_sbts_updated[d_getIdx(getMooreNeighIdx_X(row,i),getMooreNeighIdx_Y(col,i),THICKNESS)] ;
+				h[i] = s_thickness[getMooreNeighIdx_ROW(row_s,i)][getMooreNeighIdx_COL(col_s,i)];
 				H[i]  = theta[i] = 0;
 				w[i] = _w;
 				Pr[i] = _Pr;
 
-				if (i < VON_NEUMANN_NEIGHBORS)
-					z[i] = d_sbts_updated[d_getIdx(getMooreNeighIdx_X(row,i),getMooreNeighIdx_Y(col,i),ALTITUDE)] ;
-				else
+				if (i < VON_NEUMANN_NEIGHBORS){
+					//z[i]=s_altitude[getMooreNeighIdx_X(row_s,i)][getMooreNeighIdx_Y(col_s,i)];
+					z[i] =  d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,i),getMooreNeighIdx_COL(col,i),ALTITUDE)] ;
+					if(z[i] != s_altitude[getMooreNeighIdx_ROW(row_s,i)][getMooreNeighIdx_COL(col_s,i)]){
+						printf("JOLLA ,global=%f,%f,%f vic=%i %i,%i\n",d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,i),getMooreNeighIdx_COL(col,i),ALTITUDE)],z[i],s_altitude[getMooreNeighIdx_ROW(row_s,i)][getMooreNeighIdx_COL(col_s,i)],i,row,col);
+					}
+				}
+				else{
 					//val - (val-valNeigh_I)/rad2
 					z[i]= d_sbts_updated[d_getIdx(row,col,ALTITUDE)] -
 					(
 							d_sbts_updated[d_getIdx(row,col,ALTITUDE)] -
-							d_sbts_updated[d_getIdx(getMooreNeighIdx_X(row,i),getMooreNeighIdx_Y(col,i),ALTITUDE)]
+							d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,i),getMooreNeighIdx_COL(col,i),ALTITUDE)]
 
 					)/RAD2;
-
+				}
 
 			}//for
 
 			H[0] = z[0];
 			n_eliminated[0]=true;
+
 #pragma unroll
 			for ( i = 1; i < MOORE_NEIGHBORS; i++){
-				/*//Donato's code is commented here while Giuseppe's not
-				//Stick with official Donato version
-				if ((z[0] > z[i]) && (h[0] >= h[i]))
-				{
-					H[i] = z[i];
-					theta[i] = atan( (z[0] - z[i]) / w[i] );
-					n_eliminated[i]=true;
-				}
-				else*/
+
 				if ( z[0]+h[0] > z[i]+h[i] ){
 					H[i] = z[i] + h[i];
 					theta[i] = atan( ((z[0]+h[0]) - (z[i]+h[i])) / w[i] );
@@ -499,8 +594,7 @@ __device__ void CA_GPU::empiricalFlows(){
 				}else
 					n_eliminated[i]=false;
 
-				if(DEB) printf("(%i,%i),z%i=%.5f, eliminated=%i, theta=%.5f, H=%.5f, h=%.5f, w=%.5f\n",
-						row,col,i,z[i],n_eliminated[i],theta[i],H[i],h[i],w[i]);
+				//if(DEB) printf("(%i,%i),z%i=%.5f, eliminated=%i, theta=%.5f, H=%.5f, h=%.5f, w=%.5f\n",row,col,i,z[i],n_eliminated[i],theta[i],H[i],h[i],w[i]);
 			}//for
 
 			do {
@@ -528,8 +622,7 @@ __device__ void CA_GPU::empiricalFlows(){
 			for (int i=1;i<MOORE_NEIGHBORS;i++)
 				if ( n_eliminated[i] && h[0] > hc*cos(theta[i]) )
 				{
-					if(DEB) printf("Flusso verso (%d,%d),%.9f,%.9f,%.9f, %.5f flow to %i, temp=%.5f\n",
-							row,col,avg,Pr[i],H[i],Pr[i]*(avg - H[i]),i,d_sbts_updated[d_getIdx(row,col,TEMPERATURE)]);
+					//if(DEB) printf("Flusso verso (%d,%d),%.9f,%.9f,%.9f, %.5f flow to %i, temp=%.5f\n",row,col,avg,Pr[i],H[i],Pr[i]*(avg - H[i]),i,d_sbts_updated[d_getIdx(row,col,TEMPERATURE)]);
 					//dd=Pr[i]*(avg - H[i]);
 					//d_updateCellValue(current,i+4,dd,x,y);
 					//FLOWN-1 return the substate just before the flows.

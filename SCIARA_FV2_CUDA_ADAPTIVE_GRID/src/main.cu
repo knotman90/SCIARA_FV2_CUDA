@@ -135,8 +135,8 @@ void globalTransitionFunction(){
 	 *
 	 */
 	////kernel launch parameters settings
-	dimBlock.x=16;
-	dimBlock.y=16;
+	dimBlock.x=BDIM_X;
+	dimBlock.y=BDIM_Y;
 
 	computeKernelLaunchParameter_plus(dimBlock,h_CA.h_d_adaptive_grid,1,dimGrid);
 

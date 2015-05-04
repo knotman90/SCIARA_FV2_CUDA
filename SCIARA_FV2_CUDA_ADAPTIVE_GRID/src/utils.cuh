@@ -24,6 +24,16 @@ enum SubstatesNames {ALTITUDE=0,THICKNESS,TEMPERATURE,SOLIDIFIED,FLOWN,FLOWO,FLO
 enum AdaptiveGridBoundaries {ROW_START=0,ROW_END,COL_START,COL_END,
 	NEW_ROW_START,NEW_ROW_END,NEW_COL_START,NEW_COL_END,ADAPTIVEGRID_SIZE};
 
+/*
+
+		 5 | 1 | 8
+		---|---|---
+		 2 | 0 | 3
+		---|---|---
+		 6 | 4 | 7
+*/
+enum NeighborsIndices {CENTER=0,NORTH,WEST,EAST,SOUTH,NORTH_WEST,SOUTH_WEST,SOUTH_EAST,NORTH_EAST};
+
 
 inline __host__ __device__
 int get_X_LinearIdxVentCoord(int ventIdx){

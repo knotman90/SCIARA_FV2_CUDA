@@ -124,6 +124,7 @@ void printfAdaptoveGrid(){
 	printf("\n");
 }
 
+
 //#######################################
 unsigned int nVents;
 void globalTransitionFunction(){
@@ -135,7 +136,7 @@ void globalTransitionFunction(){
 	 *
 	 */
 	////kernel launch parameters settings
-	dimBlock.x=BDIM_X;
+	dimBlock.x=BDIM_X/CPT;
 	dimBlock.y=BDIM_Y;
 
 	computeKernelLaunchParameter_plus(dimBlock,h_CA.h_d_adaptive_grid,1,dimGrid);

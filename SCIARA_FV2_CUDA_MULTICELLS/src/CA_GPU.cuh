@@ -145,32 +145,32 @@ public:
 
 
 __device__ void CA_GPU::swapMatrices(){
-	int row = blockIdx.y * blockDim.y + threadIdx.y+h_d_adaptive_grid[ROW_START];
-	int col = blockIdx.x * blockDim.x + threadIdx.x+h_d_adaptive_grid[COL_START];
+	for(int cycle=0;cycle<CPT;cycle++){
 
-	if(isWithinCABounds(row,col)){
-		int idx=0;
-		__syncthreads();
+		int row = blockIdx.y * blockDim.y + threadIdx.y+h_d_adaptive_grid[ROW_START];
+		int col = blockIdx.x * CPT*(blockDim.x) + (cycle*blockDim.x) + threadIdx.x+h_d_adaptive_grid[COL_START];
+		int idx;
+		if(isWithinCABounds(row,col)){
 
-		//Thickness
-		idx=d_getIdx(row,col,ALTITUDE);
-		d_sbts_updated[idx] = d_sbts_current[idx];
-		//Thickness
-		idx=d_getIdx(row,col,THICKNESS);
-		d_sbts_updated[idx] = d_sbts_current[idx];
-		//Temperature
-		idx=d_getIdx(row,col,TEMPERATURE);
-		d_sbts_updated[idx] = d_sbts_current[idx];
-		//Solidified
-		idx=d_getIdx(row,col,SOLIDIFIED);
-		d_sbts_updated[idx] = d_sbts_current[idx];
+			//Thickness
+			idx=d_getIdx(row,col,ALTITUDE);
+			d_sbts_updated[idx] = d_sbts_current[idx];
+			//Thickness
+			idx=d_getIdx(row,col,THICKNESS);
+			d_sbts_updated[idx] = d_sbts_current[idx];
+			//Temperature
+			idx=d_getIdx(row,col,TEMPERATURE);
+			d_sbts_updated[idx] = d_sbts_current[idx];
+			//Solidified
+			idx=d_getIdx(row,col,SOLIDIFIED);
+			d_sbts_updated[idx] = d_sbts_current[idx];
 
-
-		//		__syncthreads();
-		for(int i=FLOWN;i<=FLOWNE;i++){
-			idx=d_getIdx(row,col,i);
-			d_sbts_current[idx]=0.0;
-			d_sbts_updated[idx]=0.0;
+			//clean up flows
+			for(int i=FLOWN;i<=FLOWNE;i++){
+				idx=d_getIdx(row,col,i);
+				d_sbts_current[idx]=0.0;
+				d_sbts_updated[idx]=0.0;
+			}
 		}
 	}
 
@@ -179,102 +179,98 @@ __device__ void CA_GPU::swapMatrices(){
 #define EPISILON (0.0)
 //TODO unroll sums caching the flows values
 __device__ void CA_GPU::distribuiteFlows(){
-	//get cell coordinates
-	int row = blockIdx.y * blockDim.y + threadIdx.y+h_d_adaptive_grid[ROW_START]-1;
-	int col = blockIdx.x * blockDim.x + threadIdx.x+h_d_adaptive_grid[COL_START]-1;
 
-	if(isWithinCABounds_AG_FAT(row,col)){
-		//newtick = subtract(sum of outflows) + sum(inflows)
+	for(int cycle=0;cycle<CPT;cycle++){
 
-		double sommah=d_sbts_updated[d_getIdx(row,col,THICKNESS)];
-		double new_temp = d_sbts_updated[d_getIdx(row,col,TEMPERATURE)];
-		double sommath;
+		//get cell coordinates
+		int row = blockIdx.y * blockDim.y + threadIdx.y+h_d_adaptive_grid[ROW_START]-1;
+		int col = blockIdx.x * CPT*(blockDim.x) + (cycle*blockDim.x) + threadIdx.x+h_d_adaptive_grid[COL_START]-1;
 
-		//flown(x,y) has to be added comes from the sud cell
-		//flows(neighbor1) has to be substracted because is the amount of lava that the current cell
-		//transfer to the upper cell
-		//same hold for the other pair of indices
+		if(isWithinCABounds_AG_FAT(row,col)){
+			//newtick = subtract(sum of outflows) + sum(inflows)
 
-		//new_thick= -flowToNeigh + flowReceived
-		if(isWithinCABounds(row,col)){
-			sommah-=
-					d_sbts_current[d_getIdx(row,col,FLOWN)]+
-					d_sbts_current[d_getIdx(row,col,FLOWS)]+
-					d_sbts_current[d_getIdx(row,col,FLOWE)]+
-					d_sbts_current[d_getIdx(row,col,FLOWO)]+
-					d_sbts_current[d_getIdx(row,col,FLOWNO)]+
-					d_sbts_current[d_getIdx(row,col,FLOWNE)]+
-					d_sbts_current[d_getIdx(row,col,FLOWSO)]+
-					d_sbts_current[d_getIdx(row,col,FLOWSE)];
-		}
+			double sommah=d_sbts_updated[d_getIdx(row,col,THICKNESS)];
+			double new_temp = d_sbts_updated[d_getIdx(row,col,TEMPERATURE)];
+			double sommath;
 
+			//flown(x,y) has to be added comes from the sud cell
+			//flows(neighbor1) has to be substracted because is the amount of lava that the current cell
+			//transfer to the upper cell
+			//same hold for the other pair of indices
 
-		sommath= sommah * new_temp;
-		sommah+=
-				d_sbts_current[d_getIdx(getMooreNeighIdx_ROW(row,NORTH),getMooreNeighIdx_COL(col,NORTH),FLOWS)]+
-				d_sbts_current[d_getIdx(getMooreNeighIdx_ROW(row,SOUTH),getMooreNeighIdx_COL(col,SOUTH),FLOWN)]+
-				d_sbts_current[d_getIdx(getMooreNeighIdx_ROW(row,WEST),getMooreNeighIdx_COL(col,WEST),FLOWE)]+
-				d_sbts_current[d_getIdx(getMooreNeighIdx_ROW(row,EAST),getMooreNeighIdx_COL(col,EAST),FLOWO)]+
-				d_sbts_current[d_getIdx(getMooreNeighIdx_ROW(row,SOUTH_WEST),getMooreNeighIdx_COL(col,SOUTH_WEST),FLOWNE)]+
-				d_sbts_current[d_getIdx(getMooreNeighIdx_ROW(row,NORTH_WEST),getMooreNeighIdx_COL(col,NORTH_WEST),FLOWSE)]+
-				d_sbts_current[d_getIdx(getMooreNeighIdx_ROW(row,SOUTH_EAST),getMooreNeighIdx_COL(col,SOUTH_EAST),FLOWNO)]+
-				d_sbts_current[d_getIdx(getMooreNeighIdx_ROW(row,NORTH_EAST),getMooreNeighIdx_COL(col,NORTH_EAST),FLOWSO)];
-
-		sommath+=
-				(d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,NORTH),getMooreNeighIdx_COL(col,NORTH),TEMPERATURE)]*
-						d_sbts_current[d_getIdx(getMooreNeighIdx_ROW(row,NORTH),getMooreNeighIdx_COL(col,NORTH),FLOWS)]
-				)+
-				(d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,SOUTH),getMooreNeighIdx_COL(col,SOUTH),TEMPERATURE)]*
-						d_sbts_current[d_getIdx(getMooreNeighIdx_ROW(row,SOUTH),getMooreNeighIdx_COL(col,SOUTH),FLOWN)]
-				)+
-				(d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,WEST),getMooreNeighIdx_COL(col,WEST),TEMPERATURE)]*
-						d_sbts_current[d_getIdx(getMooreNeighIdx_ROW(row,WEST),getMooreNeighIdx_COL(col,WEST),FLOWE)]
-				)+
-				(d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,EAST),getMooreNeighIdx_COL(col,EAST),TEMPERATURE)]*
-						d_sbts_current[d_getIdx(getMooreNeighIdx_ROW(row,EAST),getMooreNeighIdx_COL(col,EAST),FLOWO)]
-				)+
-				(d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,SOUTH_WEST),getMooreNeighIdx_COL(col,SOUTH_WEST),TEMPERATURE)]*
-						d_sbts_current[d_getIdx(getMooreNeighIdx_ROW(row,SOUTH_WEST),getMooreNeighIdx_COL(col,SOUTH_WEST),FLOWNE)]
-				)+
-				(d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,NORTH_WEST),getMooreNeighIdx_COL(col,NORTH_WEST),TEMPERATURE)]*
-						d_sbts_current[d_getIdx(getMooreNeighIdx_ROW(row,NORTH_WEST),getMooreNeighIdx_COL(col,NORTH_WEST),FLOWSE)]
-				)+
-				(d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,SOUTH_EAST),getMooreNeighIdx_COL(col,SOUTH_EAST),TEMPERATURE)]*
-						d_sbts_current[d_getIdx(getMooreNeighIdx_ROW(row,SOUTH_EAST),getMooreNeighIdx_COL(col,SOUTH_EAST),FLOWNO)]
-				)+
-				(d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,NORTH_EAST),getMooreNeighIdx_COL(col,NORTH_EAST),TEMPERATURE)]*
-						d_sbts_current[d_getIdx(getMooreNeighIdx_ROW(row,NORTH_EAST),getMooreNeighIdx_COL(col,NORTH_EAST),FLOWSO)]);
-
-
-		if(sommah > EPISILON){
-			//update thickness and temperature
-			double new_temp = d_computeNewTemperature(sommah,sommath);
-			if(DEB) printf("New thick/temp (%i,%i), %.5f,%.5f\n",row,col,sommah,sommath);
-			d_sbts_current[d_getIdx(row,col,TEMPERATURE)]= new_temp;
-			d_sbts_current[d_getIdx(row,col,THICKNESS)]	 = sommah;
-			if (DEB) printf("New thick/temp (%i,%i), %.5f,%.5f %f\n",row,col,d_sbts_current[d_getIdx(row,col,THICKNESS)],d_sbts_current[d_getIdx(row,col,TEMPERATURE)],d_PTsol);
-
-			//printf("I am the thread (%d,%d,%d),%.9f\n",row,col,d_getIdx(row,col,TEMPERATURE),sommah);
-			//quote increment due to solidification
-
-			if(new_temp <= d_PTsol){
-				if(DEB)printf("Solidified %i,%i %.5f %.5f %.5f\n",row,col,d_sbts_current[d_getIdx(row,col,THICKNESS)],new_temp,d_PTsol);
-				double newQuote = d_sbts_updated[d_getIdx(row,col,ALTITUDE)]+d_sbts_current[d_getIdx(row,col,THICKNESS)];
-				double newSolid = d_sbts_updated[d_getIdx(row,col,SOLIDIFIED)]+d_sbts_current[d_getIdx(row,col,THICKNESS)];
-				d_sbts_current[d_getIdx(row,col,SOLIDIFIED)] = newSolid;
-				d_sbts_current[d_getIdx(row,col,ALTITUDE)] = newQuote;
-				d_sbts_current[d_getIdx(row,col,THICKNESS)] = 0;
-				d_sbts_current[d_getIdx(row,col,TEMPERATURE)] = d_PTsol;
-			}else{
-				//there is lava and is not solidified -> activate this cell!
-				adjustAdaptiveGrid(row,col);
+			//new_thick= -flowToNeigh + flowReceived
+			if(isWithinCABounds(row,col)){
+				sommah-=
+						d_sbts_current[d_getIdx(row,col,FLOWN)]+
+						d_sbts_current[d_getIdx(row,col,FLOWS)]+
+						d_sbts_current[d_getIdx(row,col,FLOWE)]+
+						d_sbts_current[d_getIdx(row,col,FLOWO)]+
+						d_sbts_current[d_getIdx(row,col,FLOWNO)]+
+						d_sbts_current[d_getIdx(row,col,FLOWNE)]+
+						d_sbts_current[d_getIdx(row,col,FLOWSO)]+
+						d_sbts_current[d_getIdx(row,col,FLOWSE)];
 			}
 
-		}else{
-			//d_sbts_current[d_getIdx(row,col,THICKNESS)]	 = 0;
-			//d_sbts_current[d_getIdx(row,col,THICKNESS)]	 = 0;
+
+			sommath= sommah * new_temp;
+			sommah+=
+					d_sbts_current[d_getIdx(getMooreNeighIdx_ROW(row,NORTH),getMooreNeighIdx_COL(col,NORTH),FLOWS)]+
+					d_sbts_current[d_getIdx(getMooreNeighIdx_ROW(row,SOUTH),getMooreNeighIdx_COL(col,SOUTH),FLOWN)]+
+					d_sbts_current[d_getIdx(getMooreNeighIdx_ROW(row,WEST),getMooreNeighIdx_COL(col,WEST),FLOWE)]+
+					d_sbts_current[d_getIdx(getMooreNeighIdx_ROW(row,EAST),getMooreNeighIdx_COL(col,EAST),FLOWO)]+
+					d_sbts_current[d_getIdx(getMooreNeighIdx_ROW(row,SOUTH_WEST),getMooreNeighIdx_COL(col,SOUTH_WEST),FLOWNE)]+
+					d_sbts_current[d_getIdx(getMooreNeighIdx_ROW(row,NORTH_WEST),getMooreNeighIdx_COL(col,NORTH_WEST),FLOWSE)]+
+					d_sbts_current[d_getIdx(getMooreNeighIdx_ROW(row,SOUTH_EAST),getMooreNeighIdx_COL(col,SOUTH_EAST),FLOWNO)]+
+					d_sbts_current[d_getIdx(getMooreNeighIdx_ROW(row,NORTH_EAST),getMooreNeighIdx_COL(col,NORTH_EAST),FLOWSO)];
+
+			sommath+=
+					(d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,NORTH),getMooreNeighIdx_COL(col,NORTH),TEMPERATURE)]*
+							d_sbts_current[d_getIdx(getMooreNeighIdx_ROW(row,NORTH),getMooreNeighIdx_COL(col,NORTH),FLOWS)]
+					)+
+					(d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,SOUTH),getMooreNeighIdx_COL(col,SOUTH),TEMPERATURE)]*
+							d_sbts_current[d_getIdx(getMooreNeighIdx_ROW(row,SOUTH),getMooreNeighIdx_COL(col,SOUTH),FLOWN)]
+					)+
+					(d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,WEST),getMooreNeighIdx_COL(col,WEST),TEMPERATURE)]*
+							d_sbts_current[d_getIdx(getMooreNeighIdx_ROW(row,WEST),getMooreNeighIdx_COL(col,WEST),FLOWE)]
+					)+
+					(d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,EAST),getMooreNeighIdx_COL(col,EAST),TEMPERATURE)]*
+							d_sbts_current[d_getIdx(getMooreNeighIdx_ROW(row,EAST),getMooreNeighIdx_COL(col,EAST),FLOWO)]
+					)+
+					(d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,SOUTH_WEST),getMooreNeighIdx_COL(col,SOUTH_WEST),TEMPERATURE)]*
+							d_sbts_current[d_getIdx(getMooreNeighIdx_ROW(row,SOUTH_WEST),getMooreNeighIdx_COL(col,SOUTH_WEST),FLOWNE)]
+					)+
+					(d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,NORTH_WEST),getMooreNeighIdx_COL(col,NORTH_WEST),TEMPERATURE)]*
+							d_sbts_current[d_getIdx(getMooreNeighIdx_ROW(row,NORTH_WEST),getMooreNeighIdx_COL(col,NORTH_WEST),FLOWSE)]
+					)+
+					(d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,SOUTH_EAST),getMooreNeighIdx_COL(col,SOUTH_EAST),TEMPERATURE)]*
+							d_sbts_current[d_getIdx(getMooreNeighIdx_ROW(row,SOUTH_EAST),getMooreNeighIdx_COL(col,SOUTH_EAST),FLOWNO)]
+					)+
+					(d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,NORTH_EAST),getMooreNeighIdx_COL(col,NORTH_EAST),TEMPERATURE)]*
+							d_sbts_current[d_getIdx(getMooreNeighIdx_ROW(row,NORTH_EAST),getMooreNeighIdx_COL(col,NORTH_EAST),FLOWSO)]);
+
+
+			if(sommah > EPISILON){
+				//update thickness and temperature
+				double new_temp = d_computeNewTemperature(sommah,sommath);
+				d_sbts_current[d_getIdx(row,col,TEMPERATURE)]= new_temp;
+				d_sbts_current[d_getIdx(row,col,THICKNESS)]	 = sommah;
+
+				//quote increment due to solidification
+				if(new_temp <= d_PTsol){
+					printf("Solidified %i,%i %.5f %.5f %.5f\n",row,col,d_sbts_current[d_getIdx(row,col,THICKNESS)],new_temp,d_PTsol);
+					double newQuote = d_sbts_updated[d_getIdx(row,col,ALTITUDE)]+d_sbts_current[d_getIdx(row,col,THICKNESS)];
+					double newSolid = d_sbts_updated[d_getIdx(row,col,SOLIDIFIED)]+d_sbts_current[d_getIdx(row,col,THICKNESS)];
+					d_sbts_current[d_getIdx(row,col,SOLIDIFIED)] = newSolid;
+					d_sbts_current[d_getIdx(row,col,ALTITUDE)] = newQuote;
+					d_sbts_current[d_getIdx(row,col,THICKNESS)] = 0;
+					d_sbts_current[d_getIdx(row,col,TEMPERATURE)] = d_PTsol;
+				}else{
+					//there is lava and is not solidified -> activate this cell!
+					adjustAdaptiveGrid(row,col);
+				}
+			}
 		}
-	}
+	}//for
 }
 
 
@@ -425,33 +421,37 @@ __device__ void CA_GPU::emitLavaFromVent(unsigned int vent){
 
 __inline__
 __device__ void CA_GPU::cellTemperatureInitialize(){
-	//get cell coordinates
-	int row = blockIdx.y * blockDim.y + threadIdx.y+h_d_adaptive_grid[ROW_START];
-	int col = blockIdx.x * blockDim.x + threadIdx.x+h_d_adaptive_grid[COL_START];
+	for(int cycle=0;cycle<CPT;cycle++){
 
-	if(isWithinCABounds(row,col)){
-		//current cell temperature
-		double thickness = d_sbts_updated[d_getIdx(row,col,THICKNESS)];
+		//get cell coordinates
+		int row = blockIdx.y * blockDim.y + threadIdx.y+h_d_adaptive_grid[ROW_START];
+		int col = blockIdx.x * CPT*(blockDim.x) + (cycle*blockDim.x) + threadIdx.x+h_d_adaptive_grid[COL_START];
 
-		if(thickness>=0){
-			double temp = d_sbts_updated[d_getIdx(row,col,TEMPERATURE)];
-			d_sbts_current[d_getIdx(row,col,TEMPERATURE)] = thickness*temp;
+		if(isWithinCABounds(row,col)){
+			//current cell temperature
+			double thickness = d_sbts_updated[d_getIdx(row,col,THICKNESS)];
 
+			if(thickness > 0){
+				double temp = d_sbts_updated[d_getIdx(row,col,TEMPERATURE)];
+				d_sbts_current[d_getIdx(row,col,TEMPERATURE)] = thickness*temp;
+			}
+			return;
 		}
 
-		return;
 	}
-
 }
 
 __device__ void CA_GPU::empiricalFlows(){
-	int row = blockIdx.y * blockDim.y + threadIdx.y+h_d_adaptive_grid[ROW_START];
-	int col = blockIdx.x * blockDim.x + threadIdx.x+h_d_adaptive_grid[COL_START];
-	/*
-	 * Shared memory has size dimBlock.x+2 * dimBlock.y+2.
-	 * The indices of the locations that belongs to threads of this block are from the first upper
-	 * left c (1,1) to (dimBlock.x,dimBlock.y). This means that each cells can safely and easily fill
-	 * its indices (just translated by one row and column) and border have to be managed separately.
+	for(int cycle=0;cycle<CPT;cycle++){
+
+		int row = blockIdx.y * blockDim.y + threadIdx.y+h_d_adaptive_grid[ROW_START];
+		int col = blockIdx.x * CPT*(blockDim.x) + (cycle*blockDim.x) + threadIdx.x+h_d_adaptive_grid[COL_START];
+
+		/*
+		 * Shared memory has size dimBlock.x+2 * dimBlock.y+2.
+		 * The indices of the locations that belongs to threads of this block are from the first upper
+		 * left c (1,1) to (dimBlock.x,dimBlock.y). This means that each cells can safely and easily fill
+		 * its indices (just translated by one row and column) and border have to be managed separately.
 									    SHARED MEMORY LOGIC
 											+--------+
 											|uffffffy|
@@ -465,169 +465,170 @@ __device__ void CA_GPU::empiricalFlows(){
 											+--------+
 					X are ghost cells (values of threads of neighbors blocks)
 					c are cells inside the block
-	 */
-	/**The row index of the current thread in the shared memory matrix*/
-	int row_s=threadIdx.y+1;
-	/**The column index of the current thread in the shared memory matrix*/
-	int col_s=threadIdx.x+1;
-	//### SHARED INITIALIZATION ###
-	__shared__ double s_altitude [BDIM_Y+2][BDIM_X+2];
-	__shared__ double s_thickness[BDIM_Y+2][BDIM_X+2];
+		 */
+		/**The row index of the current thread in the shared memory matrix*/
+		int row_s=threadIdx.y+1;
+		/**The column index of the current thread in the shared memory matrix*/
+		int col_s=threadIdx.x+1;
+		//### SHARED INITIALIZATION ###
+		__shared__ double s_altitude [BDIM_Y+2][BDIM_X+2];
+		__shared__ double s_thickness[BDIM_Y+2][BDIM_X+2];
 
-	//-------------------FIRST ghost row (f in the picture)
-	if(threadIdx.y==0){
-		s_altitude	[0][col_s]	= d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,NORTH),getMooreNeighIdx_COL(col,NORTH),ALTITUDE)] ;
-		s_thickness	[0][col_s]	= d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,NORTH),getMooreNeighIdx_COL(col,NORTH),THICKNESS)] ;
+		//-------------------FIRST ghost row (f in the picture)
+		if(threadIdx.y==0){
+			s_altitude	[0][col_s]	= d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,NORTH),getMooreNeighIdx_COL(col,NORTH),ALTITUDE)] ;
+			s_thickness	[0][col_s]	= d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,NORTH),getMooreNeighIdx_COL(col,NORTH),THICKNESS)] ;
 
-		//upperleft corner also initialized by the thread (0,0) (u in picture)
+			//upperleft corner also initialized by the thread (0,0) (u in picture)
+			if(threadIdx.x==0){
+				s_altitude	[0][0]	= d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,NORTH_WEST),getMooreNeighIdx_COL(col,NORTH_WEST),ALTITUDE)];
+				s_thickness	[0][0]	= d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,NORTH_WEST),getMooreNeighIdx_COL(col,NORTH_WEST),THICKNESS)];
+			}
+
+			//uppertigh corner
+			if(threadIdx.x==blockDim.x-1){//upper right corner (y in picture)
+				s_altitude	[0][blockDim.x+1]	= d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,NORTH_EAST),getMooreNeighIdx_COL(col,NORTH_EAST),ALTITUDE)];
+				s_thickness	[0][blockDim.x+1]	= d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,NORTH_EAST),getMooreNeighIdx_COL(col,NORTH_EAST),THICKNESS)];
+			}
+		}
+
+		//-------------------LAST ghost row (l in the picture)
+		if(threadIdx.y==blockDim.y-1){
+			s_altitude	[blockDim.y+1][col_s]	= d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,SOUTH),getMooreNeighIdx_COL(col,SOUTH),ALTITUDE)] ;
+			s_thickness	[blockDim.y+1][col_s]	= d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,SOUTH),getMooreNeighIdx_COL(col,SOUTH),THICKNESS)] ;
+
+			if(threadIdx.x==0){//bottom left corner (t in picture)
+				s_altitude	[blockDim.y+1][0]	= d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,SOUTH_WEST),getMooreNeighIdx_COL(col,SOUTH_WEST),ALTITUDE)] ;
+				s_thickness	[blockDim.y+1][0]	= d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,SOUTH_WEST),getMooreNeighIdx_COL(col,SOUTH_WEST),THICKNESS)] ;
+			}
+			if(threadIdx.x==blockDim.x-1){//bottom right corner (r in picture)
+				s_altitude	[blockDim.y+1][blockDim.x+1]	= d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,SOUTH_EAST),getMooreNeighIdx_COL(col,SOUTH_EAST),ALTITUDE)] ;
+				s_thickness	[blockDim.y+1][blockDim.x+1]	= d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,SOUTH_EAST),getMooreNeighIdx_COL(col,SOUTH_EAST),THICKNESS)] ;
+			}
+		}
+
+		//-------------------LEFT ghost COLUMN  (k in the picture)
 		if(threadIdx.x==0){
-			s_altitude	[0][0]	= d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,NORTH_WEST),getMooreNeighIdx_COL(col,NORTH_WEST),ALTITUDE)];
-			s_thickness	[0][0]	= d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,NORTH_WEST),getMooreNeighIdx_COL(col,NORTH_WEST),THICKNESS)];
+			s_altitude	[row_s][0]	= d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,WEST),getMooreNeighIdx_COL(col,WEST),ALTITUDE)] ;
+			s_thickness	[row_s][0]	= d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,WEST),getMooreNeighIdx_COL(col,WEST),THICKNESS)] ;
+		}
+		//-------------------LEFT ghost COLUMN  (h in the picture)
+		if(threadIdx.x==blockDim.x-1){
+			s_altitude	[row_s][blockDim.x+1]	= d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,EAST),getMooreNeighIdx_COL(col,EAST),ALTITUDE)] ;
+			s_thickness	[row_s][blockDim.x+1]	= d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,EAST),getMooreNeighIdx_COL(col,EAST),THICKNESS)] ;
 		}
 
-		//uppertigh corner
-		if(threadIdx.x==blockDim.x-1){//upper right corner (y in picture)
-			s_altitude	[0][blockDim.x+1]	= d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,NORTH_EAST),getMooreNeighIdx_COL(col,NORTH_EAST),ALTITUDE)];
-			s_thickness	[0][blockDim.x+1]	= d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,NORTH_EAST),getMooreNeighIdx_COL(col,NORTH_EAST),THICKNESS)];
-		}
-	}
 
-	//-------------------LAST ghost row (l in the picture)
-	if(threadIdx.y==blockDim.y-1){
-		s_altitude	[blockDim.y+1][col_s]	= d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,SOUTH),getMooreNeighIdx_COL(col,SOUTH),ALTITUDE)] ;
-		s_thickness	[blockDim.y+1][col_s]	= d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,SOUTH),getMooreNeighIdx_COL(col,SOUTH),THICKNESS)] ;
 
-		if(threadIdx.x==0){//bottom left corner (t in picture)
-			s_altitude	[blockDim.y+1][0]	= d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,SOUTH_WEST),getMooreNeighIdx_COL(col,SOUTH_WEST),ALTITUDE)] ;
-			s_thickness	[blockDim.y+1][0]	= d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,SOUTH_WEST),getMooreNeighIdx_COL(col,SOUTH_WEST),THICKNESS)] ;
-		}
-		if(threadIdx.x==blockDim.x-1){//bottom right corner (r in picture)
-			s_altitude	[blockDim.y+1][blockDim.x+1]	= d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,SOUTH_EAST),getMooreNeighIdx_COL(col,SOUTH_EAST),ALTITUDE)] ;
-			s_thickness	[blockDim.y+1][blockDim.x+1]	= d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,SOUTH_EAST),getMooreNeighIdx_COL(col,SOUTH_EAST),THICKNESS)] ;
-		}
-	}
+		//cells inside the block done by all threads of the block! (c in picture)
+		s_altitude	[row_s][col_s]	= d_sbts_updated[d_getIdx(row,col,ALTITUDE)];
+		s_thickness	[row_s][col_s]	= d_sbts_updated[d_getIdx(row,col,THICKNESS)];
 
-	//-------------------LEFT ghost COLUMN  (k in the picture)
-	if(threadIdx.x==0){
-		s_altitude	[row_s][0]	= d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,WEST),getMooreNeighIdx_COL(col,WEST),ALTITUDE)] ;
-		s_thickness	[row_s][0]	= d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,WEST),getMooreNeighIdx_COL(col,WEST),THICKNESS)] ;
-	}
-	//-------------------LEFT ghost COLUMN  (h in the picture)
-	if(threadIdx.x==blockDim.x-1){
-		s_altitude	[row_s][blockDim.x+1]	= d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,EAST),getMooreNeighIdx_COL(col,EAST),ALTITUDE)] ;
-		s_thickness	[row_s][blockDim.x+1]	= d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,EAST),getMooreNeighIdx_COL(col,EAST),THICKNESS)] ;
-	}
+		//### SHARED SYNCH ###
+
+		__syncthreads(); //shared fence -> data has to be correctly initialized by all threads
 
 
 
-	//cells inside the block done by all threads of the block! (c in picture)
-	s_altitude	[row_s][col_s]	= d_sbts_updated[d_getIdx(row,col,ALTITUDE)];
-	s_thickness	[row_s][col_s]	= d_sbts_updated[d_getIdx(row,col,THICKNESS)];
+		if(isWithinCABounds(row,col)){
 
-	//### SHARED SYNCH ###
+			if (s_thickness[row_s][col_s] > 0) {
 
-	__syncthreads(); //shared fence -> data has to be correctly initialized by all threads
-
-
-
-	if(isWithinCABounds(row,col)){
-
-		if (s_thickness[row_s][col_s] > 0) {
-
-			bool n_eliminated[MOORE_NEIGHBORS];
-			double z[MOORE_NEIGHBORS];
-			double h[MOORE_NEIGHBORS];
-			double H[MOORE_NEIGHBORS];
-			double theta[MOORE_NEIGHBORS];
-			double w[MOORE_NEIGHBORS];		//Distances between central and adjecent cells
-			double Pr[MOORE_NEIGHBORS];		//Relaxation rate array
-			bool loop;
-			int counter,i,j;
-			double avg;
-			double _w,_Pr,hc;
-			_w 	= d_Pc;
-			_Pr = PowerLaw(d_a, d_b, d_sbts_updated[d_getIdx(row,col,TEMPERATURE)]);
-			hc 	= PowerLaw(d_c, d_d, d_sbts_updated[d_getIdx(row,col,TEMPERATURE)]);
+				bool n_eliminated[MOORE_NEIGHBORS];
+				double z[MOORE_NEIGHBORS];
+				double h[MOORE_NEIGHBORS];
+				double H[MOORE_NEIGHBORS];
+				double theta[MOORE_NEIGHBORS];
+				double w[MOORE_NEIGHBORS];		//Distances between central and adjecent cells
+				double Pr[MOORE_NEIGHBORS];		//Relaxation rate array
+				bool loop;
+				int counter,i,j;
+				double avg;
+				double _w,_Pr,hc;
+				_w 	= d_Pc;
+				_Pr = PowerLaw(d_a, d_b, d_sbts_updated[d_getIdx(row,col,TEMPERATURE)]);
+				hc 	= PowerLaw(d_c, d_d, d_sbts_updated[d_getIdx(row,col,TEMPERATURE)]);
 
 
 #pragma unroll
-			for ( i = 0; i < MOORE_NEIGHBORS; i++) {
+				for ( i = 0; i < MOORE_NEIGHBORS; i++) {
 
-				//h[i] = d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,i),getMooreNeighIdx_COL(col,i),THICKNESS)] ;
-				h[i] = s_thickness[getMooreNeighIdx_ROW(row_s,i)][getMooreNeighIdx_COL(col_s,i)];
-				H[i]  = theta[i] = 0;
-				w[i] = _w;
-				Pr[i] = _Pr;
+					//h[i] = d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,i),getMooreNeighIdx_COL(col,i),THICKNESS)] ;
+					h[i] = s_thickness[getMooreNeighIdx_ROW(row_s,i)][getMooreNeighIdx_COL(col_s,i)];
+					H[i]  = theta[i] = 0;
+					w[i] = _w;
+					Pr[i] = _Pr;
 
-				if (i < VON_NEUMANN_NEIGHBORS){
-					z[i] = s_altitude[getMooreNeighIdx_ROW(row_s,i)][getMooreNeighIdx_COL(col_s,i)];
-					//z[i] = d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,i),getMooreNeighIdx_COL(col,i),ALTITUDE)] ;
-				}else{
-					//val - (val-valNeigh_I)/rad2
-					z[i]= s_altitude[row_s][col_s] -
-					(
-							s_altitude[row_s][col_s] -
-							s_altitude[getMooreNeighIdx_ROW(row_s,i)][getMooreNeighIdx_COL(col_s,i)]
+					if (i < VON_NEUMANN_NEIGHBORS){
+						z[i] = s_altitude[getMooreNeighIdx_ROW(row_s,i)][getMooreNeighIdx_COL(col_s,i)];
+						//z[i] = d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,i),getMooreNeighIdx_COL(col,i),ALTITUDE)] ;
+					}else{
+						//val - (val-valNeigh_I)/rad2
+						z[i]= s_altitude[row_s][col_s] -
+								(
+										s_altitude[row_s][col_s] -
+										s_altitude[getMooreNeighIdx_ROW(row_s,i)][getMooreNeighIdx_COL(col_s,i)]
 
-					)/RAD2;
+								)/RAD2;
 
-				}//else
-			}//for
+					}//else
+				}//for
 
-			H[0] = z[0];
-			n_eliminated[0]=true;
+				H[0] = z[0];
+				n_eliminated[0]=true;
 
 #pragma unroll
-			for ( i = 1; i < MOORE_NEIGHBORS; i++){
+				for ( i = 1; i < MOORE_NEIGHBORS; i++){
 
-				if ( z[0]+h[0] > z[i]+h[i] ){
-					H[i] = z[i] + h[i];
-					theta[i] = atan( ((z[0]+h[0]) - (z[i]+h[i])) / w[i] );
-					n_eliminated[i]=true;
-				}else
-					n_eliminated[i]=false;
+					if ( z[0]+h[0] > z[i]+h[i] ){
+						H[i] = z[i] + h[i];
+						theta[i] = atan( ((z[0]+h[0]) - (z[i]+h[i])) / w[i] );
+						n_eliminated[i]=true;
+					}else
+						n_eliminated[i]=false;
 
-				//if(DEB) printf("(%i,%i),z%i=%.5f, eliminated=%i, theta=%.5f, H=%.5f, h=%.5f, w=%.5f\n",row,col,i,z[i],n_eliminated[i],theta[i],H[i],h[i],w[i]);
-			}//for
+					//if(DEB) printf("(%i,%i),z%i=%.5f, eliminated=%i, theta=%.5f, H=%.5f, h=%.5f, w=%.5f\n",row,col,i,z[i],n_eliminated[i],theta[i],H[i],h[i],w[i]);
+				}//for
 
-			do {
-				loop = false;
-				avg = h[0];
-				counter = 0;
+				do {
+					loop = false;
+					avg = h[0];
+					counter = 0;
 #pragma unroll
-				for ( j = 0; j < MOORE_NEIGHBORS; j++)
-					if (n_eliminated[j]) {
-						avg += H[j];
-						counter++;
+					for ( j = 0; j < MOORE_NEIGHBORS; j++)
+						if (n_eliminated[j]) {
+							avg += H[j];
+							counter++;
+						}
+					if (counter != 0)
+						avg = avg / double(counter);
+#pragma unroll
+					for ( j = 0; j < MOORE_NEIGHBORS; j++)
+						if (n_eliminated[j] && avg <= H[j]) {
+							n_eliminated[j] = false;
+							loop = true;
+						}
+				} while (loop);
+
+				//now collect and save flows
+#pragma unroll
+				for (int i=1;i<MOORE_NEIGHBORS;i++)
+					if ( n_eliminated[i] && h[0] > hc*cos(theta[i]) )
+					{
+						//if(DEB) printf("Flusso verso (%d,%d),%.9f,%.9f,%.9f, %.5f flow to %i, temp=%.5f\n",row,col,avg,Pr[i],H[i],Pr[i]*(avg - H[i]),i,d_sbts_updated[d_getIdx(row,col,TEMPERATURE)]);
+						//dd=Pr[i]*(avg - H[i]);
+						//d_updateCellValue(current,i+4,dd,x,y);
+						//FLOWN-1 return the substate just before the flows.
+						//i starts from 1 -> hence it only operates on the flows substates
+						d_sbts_current[d_getIdx(row,col,FLOWN+i-1)]= Pr[i]*(avg - H[i]);
 					}
-				if (counter != 0)
-					avg = avg / double(counter);
-#pragma unroll
-				for ( j = 0; j < MOORE_NEIGHBORS; j++)
-					if (n_eliminated[j] && avg <= H[j]) {
-						n_eliminated[j] = false;
-						loop = true;
-					}
-			} while (loop);
+					else
+						d_sbts_current[d_getIdx(row,col,FLOWN+i-1)]= 0.0;
 
-			//now collect and save flows
-#pragma unroll
-			for (int i=1;i<MOORE_NEIGHBORS;i++)
-				if ( n_eliminated[i] && h[0] > hc*cos(theta[i]) )
-				{
-					//if(DEB) printf("Flusso verso (%d,%d),%.9f,%.9f,%.9f, %.5f flow to %i, temp=%.5f\n",row,col,avg,Pr[i],H[i],Pr[i]*(avg - H[i]),i,d_sbts_updated[d_getIdx(row,col,TEMPERATURE)]);
-					//dd=Pr[i]*(avg - H[i]);
-					//d_updateCellValue(current,i+4,dd,x,y);
-					//FLOWN-1 return the substate just before the flows.
-					//i starts from 1 -> hence it only operates on the flows substates
-					d_sbts_current[d_getIdx(row,col,FLOWN+i-1)]= Pr[i]*(avg - H[i]);
-				}
-				else
-					d_sbts_current[d_getIdx(row,col,FLOWN+i-1)]= 0.0;
+			}//d_sbts_updated(THICKNESS)>0
 
-		}//d_sbts_updated(THICKNESS)>0
-
-	}//isWithinCABounds
+		}//isWithinCABounds
+	}//for cycle
 }
 
 

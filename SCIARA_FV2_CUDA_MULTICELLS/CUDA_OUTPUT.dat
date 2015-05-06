@@ -1,0 +1,9 @@
+TEST RUN FOR /home/knotman/git/SCIARA_FV2_CUDA/SCIARA_FV2_CUDA_ADAPTIVE_GRID/Debug/SCIARA_FV2_CUDA_ADAPTIVE_GRID 100 to 500 with step of 100
+Copying back 4 substates
+SIMULATION ENDED in 17 ms
+Copying back 4 substates
+SIMULATION ENDED in 36 ms
+Copying back 4 substates
+SIMULATION ENDED in 53 ms
+Copying back 4 substates
+SIMULATION ENDED in 72 ms

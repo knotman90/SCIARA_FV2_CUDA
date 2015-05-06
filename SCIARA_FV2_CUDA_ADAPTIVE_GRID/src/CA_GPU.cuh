@@ -208,54 +208,57 @@ __device__ void CA_GPU::distribuiteFlows(){
 					d_sbts_current[d_getIdx(row,col,FLOWSE)];
 		}
 
+
 		sommath= sommah * new_temp;
 		sommah+=
-				d_sbts_current[d_getIdx(getMooreNeighIdx_ROW(row,1),getMooreNeighIdx_COL(col,1),FLOWS)]+
-				d_sbts_current[d_getIdx(getMooreNeighIdx_ROW(row,4),getMooreNeighIdx_COL(col,4),FLOWN)]+
-				d_sbts_current[d_getIdx(getMooreNeighIdx_ROW(row,2),getMooreNeighIdx_COL(col,2),FLOWE)]+
-				d_sbts_current[d_getIdx(getMooreNeighIdx_ROW(row,3),getMooreNeighIdx_COL(col,3),FLOWO)]+
-				d_sbts_current[d_getIdx(getMooreNeighIdx_ROW(row,6),getMooreNeighIdx_COL(col,6),FLOWNE)]+
-				d_sbts_current[d_getIdx(getMooreNeighIdx_ROW(row,5),getMooreNeighIdx_COL(col,5),FLOWSE)]+
-				d_sbts_current[d_getIdx(getMooreNeighIdx_ROW(row,7),getMooreNeighIdx_COL(col,7),FLOWNO)]+
-				d_sbts_current[d_getIdx(getMooreNeighIdx_ROW(row,8),getMooreNeighIdx_COL(col,8),FLOWSO)];
+				d_sbts_current[d_getIdx(getMooreNeighIdx_ROW(row,NORTH),getMooreNeighIdx_COL(col,NORTH),FLOWS)]+
+				d_sbts_current[d_getIdx(getMooreNeighIdx_ROW(row,SOUTH),getMooreNeighIdx_COL(col,SOUTH),FLOWN)]+
+				d_sbts_current[d_getIdx(getMooreNeighIdx_ROW(row,WEST),getMooreNeighIdx_COL(col,WEST),FLOWE)]+
+				d_sbts_current[d_getIdx(getMooreNeighIdx_ROW(row,EAST),getMooreNeighIdx_COL(col,EAST),FLOWO)]+
+				d_sbts_current[d_getIdx(getMooreNeighIdx_ROW(row,SOUTH_WEST),getMooreNeighIdx_COL(col,SOUTH_WEST),FLOWNE)]+
+				d_sbts_current[d_getIdx(getMooreNeighIdx_ROW(row,NORTH_WEST),getMooreNeighIdx_COL(col,NORTH_WEST),FLOWSE)]+
+				d_sbts_current[d_getIdx(getMooreNeighIdx_ROW(row,SOUTH_EAST),getMooreNeighIdx_COL(col,SOUTH_EAST),FLOWNO)]+
+				d_sbts_current[d_getIdx(getMooreNeighIdx_ROW(row,NORTH_EAST),getMooreNeighIdx_COL(col,NORTH_EAST),FLOWSO)];
 
 		sommath+=
-				(d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,1),getMooreNeighIdx_COL(col,1),TEMPERATURE)]*
-						d_sbts_current[d_getIdx(getMooreNeighIdx_ROW(row,1),getMooreNeighIdx_COL(col,1),FLOWS)]
+				(d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,NORTH),getMooreNeighIdx_COL(col,NORTH),TEMPERATURE)]*
+						d_sbts_current[d_getIdx(getMooreNeighIdx_ROW(row,NORTH),getMooreNeighIdx_COL(col,NORTH),FLOWS)]
 				)+
-				(d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,4),getMooreNeighIdx_COL(col,4),TEMPERATURE)]*
-						d_sbts_current[d_getIdx(getMooreNeighIdx_ROW(row,4),getMooreNeighIdx_COL(col,4),FLOWN)]
+				(d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,SOUTH),getMooreNeighIdx_COL(col,SOUTH),TEMPERATURE)]*
+						d_sbts_current[d_getIdx(getMooreNeighIdx_ROW(row,SOUTH),getMooreNeighIdx_COL(col,SOUTH),FLOWN)]
 				)+
-				(d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,2),getMooreNeighIdx_COL(col,2),TEMPERATURE)]*
-						d_sbts_current[d_getIdx(getMooreNeighIdx_ROW(row,2),getMooreNeighIdx_COL(col,2),FLOWE)]
+				(d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,WEST),getMooreNeighIdx_COL(col,WEST),TEMPERATURE)]*
+						d_sbts_current[d_getIdx(getMooreNeighIdx_ROW(row,WEST),getMooreNeighIdx_COL(col,WEST),FLOWE)]
 				)+
-				(d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,3),getMooreNeighIdx_COL(col,3),TEMPERATURE)]*
-						d_sbts_current[d_getIdx(getMooreNeighIdx_ROW(row,3),getMooreNeighIdx_COL(col,3),FLOWO)]
+				(d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,EAST),getMooreNeighIdx_COL(col,EAST),TEMPERATURE)]*
+						d_sbts_current[d_getIdx(getMooreNeighIdx_ROW(row,EAST),getMooreNeighIdx_COL(col,EAST),FLOWO)]
 				)+
-				(d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,6),getMooreNeighIdx_COL(col,6),TEMPERATURE)]*
-						d_sbts_current[d_getIdx(getMooreNeighIdx_ROW(row,6),getMooreNeighIdx_COL(col,6),FLOWNE)]
+				(d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,SOUTH_WEST),getMooreNeighIdx_COL(col,SOUTH_WEST),TEMPERATURE)]*
+						d_sbts_current[d_getIdx(getMooreNeighIdx_ROW(row,SOUTH_WEST),getMooreNeighIdx_COL(col,SOUTH_WEST),FLOWNE)]
 				)+
-				(d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,5),getMooreNeighIdx_COL(col,5),TEMPERATURE)]*
-						d_sbts_current[d_getIdx(getMooreNeighIdx_ROW(row,5),getMooreNeighIdx_COL(col,5),FLOWSE)]
+				(d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,NORTH_WEST),getMooreNeighIdx_COL(col,NORTH_WEST),TEMPERATURE)]*
+						d_sbts_current[d_getIdx(getMooreNeighIdx_ROW(row,NORTH_WEST),getMooreNeighIdx_COL(col,NORTH_WEST),FLOWSE)]
 				)+
-				(d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,7),getMooreNeighIdx_COL(col,7),TEMPERATURE)]*
-						d_sbts_current[d_getIdx(getMooreNeighIdx_ROW(row,7),getMooreNeighIdx_COL(col,7),FLOWNO)]
+				(d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,SOUTH_EAST),getMooreNeighIdx_COL(col,SOUTH_EAST),TEMPERATURE)]*
+						d_sbts_current[d_getIdx(getMooreNeighIdx_ROW(row,SOUTH_EAST),getMooreNeighIdx_COL(col,SOUTH_EAST),FLOWNO)]
 				)+
-				(d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,8),getMooreNeighIdx_COL(col,8),TEMPERATURE)]*
-						d_sbts_current[d_getIdx(getMooreNeighIdx_ROW(row,8),getMooreNeighIdx_COL(col,8),FLOWSO)]);
+				(d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,NORTH_EAST),getMooreNeighIdx_COL(col,NORTH_EAST),TEMPERATURE)]*
+						d_sbts_current[d_getIdx(getMooreNeighIdx_ROW(row,NORTH_EAST),getMooreNeighIdx_COL(col,NORTH_EAST),FLOWSO)]);
 
 
 		if(sommah > EPISILON){
 			//update thickness and temperature
 			double new_temp = d_computeNewTemperature(sommah,sommath);
-			//if(DEB) printf("New thick/temp (%i,%i), %.5f,%.5f\n",row,col,sommah,sommath);
+			if(DEB) printf("New thick/temp (%i,%i), %.5f,%.5f\n",row,col,sommah,sommath);
 			d_sbts_current[d_getIdx(row,col,TEMPERATURE)]= new_temp;
 			d_sbts_current[d_getIdx(row,col,THICKNESS)]	 = sommah;
+			if (DEB) printf("New thick/temp (%i,%i), %.5f,%.5f %f\n",row,col,d_sbts_current[d_getIdx(row,col,THICKNESS)],d_sbts_current[d_getIdx(row,col,TEMPERATURE)],d_PTsol);
 
 			//printf("I am the thread (%d,%d,%d),%.9f\n",row,col,d_getIdx(row,col,TEMPERATURE),sommah);
 			//quote increment due to solidification
-			if(new_temp<=d_PTsol){
-				//if(DEB) printf("Solidified %i,%i %.5f\n",row,col,d_sbts_current[d_getIdx(row,col,THICKNESS)]);
+
+			if(new_temp <= d_PTsol){
+				if(DEB)printf("Solidified %i,%i %.5f %.5f %.5f\n",row,col,d_sbts_current[d_getIdx(row,col,THICKNESS)],new_temp,d_PTsol);
 				double newQuote = d_sbts_updated[d_getIdx(row,col,ALTITUDE)]+d_sbts_current[d_getIdx(row,col,THICKNESS)];
 				double newSolid = d_sbts_updated[d_getIdx(row,col,SOLIDIFIED)]+d_sbts_current[d_getIdx(row,col,THICKNESS)];
 				d_sbts_current[d_getIdx(row,col,SOLIDIFIED)] = newSolid;
@@ -529,13 +532,6 @@ __device__ void CA_GPU::empiricalFlows(){
 
 	if(isWithinCABounds(row,col)){
 
-
-//		for(int i=-1;i<=1;i++){
-//			for(int j=-1;j<=1;j++){
-//				printf("(%i,%i,%i,%i)rows %i,cols %i %f \n",row,col,i,j,row_s,col_s,s_altitude[row_s+i][col_s+j]);
-//			}
-//		}
-
 		if (s_thickness[row_s][col_s] > 0) {
 
 			bool n_eliminated[MOORE_NEIGHBORS];
@@ -557,28 +553,25 @@ __device__ void CA_GPU::empiricalFlows(){
 #pragma unroll
 			for ( i = 0; i < MOORE_NEIGHBORS; i++) {
 
+				//h[i] = d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,i),getMooreNeighIdx_COL(col,i),THICKNESS)] ;
 				h[i] = s_thickness[getMooreNeighIdx_ROW(row_s,i)][getMooreNeighIdx_COL(col_s,i)];
 				H[i]  = theta[i] = 0;
 				w[i] = _w;
 				Pr[i] = _Pr;
 
 				if (i < VON_NEUMANN_NEIGHBORS){
-					//z[i]=s_altitude[getMooreNeighIdx_X(row_s,i)][getMooreNeighIdx_Y(col_s,i)];
-					z[i] =  d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,i),getMooreNeighIdx_COL(col,i),ALTITUDE)] ;
-					if(z[i] != s_altitude[getMooreNeighIdx_ROW(row_s,i)][getMooreNeighIdx_COL(col_s,i)]){
-						printf("JOLLA ,global=%f,%f,%f vic=%i %i,%i\n",d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,i),getMooreNeighIdx_COL(col,i),ALTITUDE)],z[i],s_altitude[getMooreNeighIdx_ROW(row_s,i)][getMooreNeighIdx_COL(col_s,i)],i,row,col);
-					}
-				}
-				else{
+					z[i] = s_altitude[getMooreNeighIdx_ROW(row_s,i)][getMooreNeighIdx_COL(col_s,i)];
+					//z[i] = d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,i),getMooreNeighIdx_COL(col,i),ALTITUDE)] ;
+				}else{
 					//val - (val-valNeigh_I)/rad2
-					z[i]= d_sbts_updated[d_getIdx(row,col,ALTITUDE)] -
+					z[i]= s_altitude[row_s][col_s] -
 					(
-							d_sbts_updated[d_getIdx(row,col,ALTITUDE)] -
-							d_sbts_updated[d_getIdx(getMooreNeighIdx_ROW(row,i),getMooreNeighIdx_COL(col,i),ALTITUDE)]
+							s_altitude[row_s][col_s] -
+							s_altitude[getMooreNeighIdx_ROW(row_s,i)][getMooreNeighIdx_COL(col_s,i)]
 
 					)/RAD2;
-				}
 
+				}//else
 			}//for
 
 			H[0] = z[0];
@@ -636,6 +629,7 @@ __device__ void CA_GPU::empiricalFlows(){
 
 	}//isWithinCABounds
 }
+
 
 
 __inline__

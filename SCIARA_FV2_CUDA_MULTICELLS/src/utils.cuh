@@ -77,6 +77,9 @@ __host__ __device__ void computeKernelLaunchParameter
 
 }
 
+
+
+#define CPT (2) //cells per threads
 /**
  * Compute the number of block on x and y direction necessary to
  * allocate the number of thread described by the adaptive grid bounding box
@@ -90,8 +93,8 @@ __host__ __device__ void computeKernelLaunchParameter_plus(dim3 dimBlock,uint* h
 	cudaDeviceSynchronize();
 	int COLS=h_d_adaptive_grid[COL_END]-h_d_adaptive_grid[COL_START]+plus;
 	int ROWS=h_d_adaptive_grid[ROW_END]-h_d_adaptive_grid[ROW_START]+plus;
-	dimGrid.x = divup(COLS,dimBlock.x);
-	dimGrid.y = divup(ROWS,dimBlock.x);
+	dimGrid.x = divup(COLS,dimBlock.x*CPT);
+	dimGrid.y = divup(ROWS,dimBlock.y);
 	//printf("Launch paramrters: BLOCK %i,%i GRID %i,%i\n",dimBlock.x,dimBlock.y,dimGrid.x,dimGrid.y);
 	cudaDeviceSynchronize();
 

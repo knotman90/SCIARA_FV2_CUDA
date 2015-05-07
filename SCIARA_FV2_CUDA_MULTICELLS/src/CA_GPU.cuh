@@ -10,8 +10,8 @@
 #include <math.h>
 #define DEB (0)
 
-#define BDIM_X (8)
-#define BDIM_Y (8)
+#define BDIM_X (16)
+#define BDIM_Y (16)
 
 class CA_GPU{
 	friend class CA_HOST;
@@ -145,10 +145,11 @@ public:
 
 
 __device__ void CA_GPU::swapMatrices(){
-	for(int cycle=0;cycle<CPT;cycle++){
+#pragma unroll
+	for(int cycle=0;cycle<CPT_COL;cycle++){
 
 		int row = blockIdx.y * blockDim.y + threadIdx.y+h_d_adaptive_grid[ROW_START];
-		int col = blockIdx.x * CPT*(blockDim.x) + (cycle*blockDim.x) + threadIdx.x+h_d_adaptive_grid[COL_START];
+		int col = blockIdx.x * CPT_COL*(blockDim.x) + (cycle*blockDim.x) + threadIdx.x+h_d_adaptive_grid[COL_START];
 		int idx;
 		if(isWithinCABounds(row,col)){
 
@@ -179,12 +180,12 @@ __device__ void CA_GPU::swapMatrices(){
 #define EPISILON (0.0)
 //TODO unroll sums caching the flows values
 __device__ void CA_GPU::distribuiteFlows(){
-
-	for(int cycle=0;cycle<CPT;cycle++){
+#pragma unroll
+	for(int cycle=0;cycle<CPT_COL;cycle++){
 
 		//get cell coordinates
 		int row = blockIdx.y * blockDim.y + threadIdx.y+h_d_adaptive_grid[ROW_START]-1;
-		int col = blockIdx.x * CPT*(blockDim.x) + (cycle*blockDim.x) + threadIdx.x+h_d_adaptive_grid[COL_START]-1;
+		int col = blockIdx.x * CPT_COL*(blockDim.x) + (cycle*blockDim.x) + threadIdx.x+h_d_adaptive_grid[COL_START]-1;
 
 		if(isWithinCABounds_AG_FAT(row,col)){
 			//newtick = subtract(sum of outflows) + sum(inflows)
@@ -256,8 +257,8 @@ __device__ void CA_GPU::distribuiteFlows(){
 				d_sbts_current[d_getIdx(row,col,THICKNESS)]	 = sommah;
 
 				//quote increment due to solidification
-				if(new_temp <= d_PTsol){
-					printf("Solidified %i,%i %.5f %.5f %.5f\n",row,col,d_sbts_current[d_getIdx(row,col,THICKNESS)],new_temp,d_PTsol);
+				if(new_temp < d_PTsol){
+					if(DEB)printf("Solidified %i,%i %.5f %.5f %.5f\n",row,col,d_sbts_current[d_getIdx(row,col,THICKNESS)],new_temp,d_PTsol);
 					double newQuote = d_sbts_updated[d_getIdx(row,col,ALTITUDE)]+d_sbts_current[d_getIdx(row,col,THICKNESS)];
 					double newSolid = d_sbts_updated[d_getIdx(row,col,SOLIDIFIED)]+d_sbts_current[d_getIdx(row,col,THICKNESS)];
 					d_sbts_current[d_getIdx(row,col,SOLIDIFIED)] = newSolid;
@@ -421,11 +422,12 @@ __device__ void CA_GPU::emitLavaFromVent(unsigned int vent){
 
 __inline__
 __device__ void CA_GPU::cellTemperatureInitialize(){
-	for(int cycle=0;cycle<CPT;cycle++){
+#pragma unroll
+	for(int cycle=0;cycle<CPT_COL;cycle++){
 
 		//get cell coordinates
 		int row = blockIdx.y * blockDim.y + threadIdx.y+h_d_adaptive_grid[ROW_START];
-		int col = blockIdx.x * CPT*(blockDim.x) + (cycle*blockDim.x) + threadIdx.x+h_d_adaptive_grid[COL_START];
+		int col = blockIdx.x * CPT_COL*(blockDim.x) + (cycle*blockDim.x) + threadIdx.x+h_d_adaptive_grid[COL_START];
 
 		if(isWithinCABounds(row,col)){
 			//current cell temperature
@@ -442,10 +444,12 @@ __device__ void CA_GPU::cellTemperatureInitialize(){
 }
 
 __device__ void CA_GPU::empiricalFlows(){
-	for(int cycle=0;cycle<CPT;cycle++){
+#pragma unroll
+	for(int cycle=0;cycle<CPT_COL;cycle++){
+	__syncthreads();
 
 		int row = blockIdx.y * blockDim.y + threadIdx.y+h_d_adaptive_grid[ROW_START];
-		int col = blockIdx.x * CPT*(blockDim.x) + (cycle*blockDim.x) + threadIdx.x+h_d_adaptive_grid[COL_START];
+		int col = blockIdx.x * CPT_COL*(blockDim.x) + (cycle*blockDim.x) + threadIdx.x+h_d_adaptive_grid[COL_START];
 
 		/*
 		 * Shared memory has size dimBlock.x+2 * dimBlock.y+2.
@@ -471,8 +475,8 @@ __device__ void CA_GPU::empiricalFlows(){
 		/**The column index of the current thread in the shared memory matrix*/
 		int col_s=threadIdx.x+1;
 		//### SHARED INITIALIZATION ###
-		__shared__ double s_altitude [BDIM_Y+2][BDIM_X+2];
-		__shared__ double s_thickness[BDIM_Y+2][BDIM_X+2];
+		__shared__ double s_altitude [BDIM_Y+2][BDIM_X/CPT_COL+2];
+		__shared__ double s_thickness[BDIM_Y+2][BDIM_X/CPT_COL+2];
 
 		//-------------------FIRST ghost row (f in the picture)
 		if(threadIdx.y==0){
@@ -525,13 +529,11 @@ __device__ void CA_GPU::empiricalFlows(){
 		s_thickness	[row_s][col_s]	= d_sbts_updated[d_getIdx(row,col,THICKNESS)];
 
 		//### SHARED SYNCH ###
-
 		__syncthreads(); //shared fence -> data has to be correctly initialized by all threads
 
 
 
 		if(isWithinCABounds(row,col)){
-
 			if (s_thickness[row_s][col_s] > 0) {
 
 				bool n_eliminated[MOORE_NEIGHBORS];

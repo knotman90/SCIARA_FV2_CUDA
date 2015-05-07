@@ -150,8 +150,6 @@ __device__ void CA_GPU::swapMatrices(){
 
 	if(isWithinCABounds(row,col)){
 		int idx=0;
-		__syncthreads();
-
 		//Thickness
 		idx=d_getIdx(row,col,ALTITUDE);
 		d_sbts_updated[idx] = d_sbts_current[idx];
